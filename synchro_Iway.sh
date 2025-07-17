@@ -171,7 +171,8 @@ lon2() ( echo $(( Lengh2 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 
 
 eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"' $logfile_display
-
+executed_date=$(date)
+eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display
 
 ## UI tags
 ui_tag_write="[\e[43m \u270E \e[0m]"
@@ -244,19 +245,19 @@ section_title="Variables"
 eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display
 if [[ "$LOCALDIR" == "" ]]; then
   eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire local\n"' $logfile_display
-  eval 'echo -e "      UTILISATION: ./synchro.sh -l local_dir"' $logfile_display;
-  eval 'echo -e "                ou ./synchro.sh -e"' $logfile_display;
+  eval 'echo -e "      UTILISATION: ./"$script_name_full" -l local_dir"' $logfile_display;
+  eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display;
   exit 1
 else
   eval 'echo -e "$ui_tag_ok Répertoire local: $LOCALDIR"' $logfile_display
   if [[ "$REMOTEDIR" == "" ]]; then
     eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire distant\n"' $logfile_display
-    eval 'echo -e "      UTILISATION: ./synchro.sh -r remote_dir"' $logfile_display;
-    eval 'echo -e "                ou ./synchro.sh -e"' $logfile_display;
+    eval 'echo -e "      UTILISATION: ./"$script_name_full" -r remote_dir"' $logfile_display;
+    eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display;
     exit 1
   fi
   eval 'echo -e "$ui_tag_ok Répertoire distant: $REMOTEDIR"' $logfile_display
-  mkdir -p "$LOCALDIR$REMOTEDIR" 2>/dev/null
+  mkdir -p "$LOCALDIR/$REMOTEDIR" 2>/dev/null
 fi
 if [[ "$LOGIN" != "" ]] && [[ "$PASSWORD" != "" ]]; then
   eval 'echo -e "$ui_tag_ok Utilisateur: $LOGIN"' $logfile_display
@@ -264,14 +265,14 @@ if [[ "$LOGIN" != "" ]] && [[ "$PASSWORD" != "" ]]; then
 else
   if [[ "$LOGIN" == "" ]]; then
     eval 'echo -e "$ui_tag_bad Utilisateur non renseigné"' $logfile_display
-    eval 'echo -e "      UTILISATION: ./synchro.sh -e"' $logfile_display;
+    eval 'echo -e "      UTILISATION: ./"$script_name_full" -e"' $logfile_display;
     eval 'echo -e "      ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display;
   else
     eval 'echo -e "$ui_tag_ok Utilisateur: $LOGIN"' $logfile_display
   fi
   if [[ "$PASSWORD" == "" ]]; then
     eval 'echo -e "$ui_tag_bad Mot de passe non renseigné"' $logfile_display
-    eval 'echo -e "      UTILISATION: ./synchro.sh -e"' $logfile_display;
+    eval 'echo -e "      UTILISATION: ./"$script_name_full" -e"' $logfile_display;
     eval 'echo -e "      ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display;
   else
     eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display
