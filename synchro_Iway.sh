@@ -299,7 +299,14 @@ eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfi
 if [ -e "$LOCALDIR$REMOTEDIR" ]; then
 #  eval 'lftp -u $LOGIN,$PASSWORD $HOST -e "mirror $EXCLUDED $REMOTEDIR $LOCALDIR$REMOTEDIR ; quit"' $logfile_cmd
   lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror $EXCLUDED $REMOTEDIR $LOCALDIR$REMOTEDIR ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
+  if [[ "$(cat logfile_lftp | grep "Login failed")" != "" ]]; then
+    eval 'echo -e "$ui_tag_bad Connexion echouée : Login et/ou Password incorect(s)"' $logfile_display
+  else
+    eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display
+  fi
   chmod 777 -R $LOCALDIR$REMOTEDIR 2>/dev/null
 else
   eval 'echo -e "$ui_tag_bad Dossier local non créé"' $logfile_display
 fi
+executed_date=$(date)
+eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display
