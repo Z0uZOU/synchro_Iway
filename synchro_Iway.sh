@@ -23,6 +23,17 @@ dependencies="curl lftp"
 
 
 #######################
+## Check if this script is running
+check_dupe=$(ps -ef | grep "$0" | grep -v grep | wc -l | xargs)
+process_number="2"
+if [[ "$check_dupe" > "$process_number" ]]; then
+  echo "Script déjà en cours d'exécution"
+  date
+  exit 1
+fi
+
+
+#######################
 ## Advanced command arguments
 die() { echo "$*" >&2; exit 2; }  # complain to STDERR and exit with error
 needs_arg() { if [ -z "$OPTARG" ]; then die "No arg for --$OPT option"; fi; }
