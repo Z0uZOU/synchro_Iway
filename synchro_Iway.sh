@@ -51,33 +51,33 @@ while getopts euhr:l:-: OPT; do
             exit 0
             ;;
     u | update )
-            echo -e "\033[1m$script_name_cap - Update initiated\033[0m"
-            read -n 1 -p "Do you want to proceed [y/N]:" yn
+            echo -e "\033[1m$script_name_cap - Mise à jour lancée\033[0m"
+            read -n 1 -p "Voulez-vous continuer [o/N]:" yn
             printf "\r                                                     "
-            if [[ "${yn}" == @(y|Y) ]]; then
+            if [[ "${yn}" == @(o|O) ]]; then
               echo ""
               this_script=$(realpath -s "$0")
-              echo "Script location : "$this_script
+              echo "Emplacement du script : "$this_script
               if curl -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; then
-                echo "Script available online on GitHub "
+                echo "Script disponible en ligne sur GitHub"
                 md5_local=`md5sum "$this_script" | cut -f1 -d" " 2>/dev/null`
                 md5_remote=`curl -s "$script_remote" | md5sum | cut -f1 -d" "`
                 echo "MD5 local  : "$md5_local
                 echo "MD5 remote : "$md5_remote
                 if [[ "$md5_local" != "$md5_remote" ]]; then
-                  echo "A new version of the script is available... downloading"
+                  echo "Une nouvelle version du script est disponible... en téléchargement"
                   curl -s -m 3 --create-dir -o "$this_script" "$script_remote"
-                  echo "Update completed... exit"
+                  echo "Mise à jour terminée... exit"
                 else
-                  echo "The script is up to date... exit"
+                  echo "Le script est à jour... exit"
                 fi
               else
                 echo ""
-                echo "Script offline"
+                echo "Script hors ligne"
               fi
             else
               echo ""
-              echo "Nothing was done"
+              echo "Rien n'a été fait"
             fi
             exit 0
             ;;
