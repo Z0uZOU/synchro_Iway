@@ -185,7 +185,7 @@ function downloading_loading() {
         if [[ "${#folder} + ${#file}" -gt "65" ]]; then
           print_file=`echo ${folder: -65}/$file | sed "s:[^\/]*\/:...\/:"`
         else
-          print_file=`echo $folder/$file`        
+          print_file=`echo $folder/$file`
         fi
         printf "\r[${spin:$i:1}] Téléchargement de $print_file"
         sleep .1
@@ -312,7 +312,7 @@ else
   else
     eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display
   fi
-  exit 1 
+  exit 1
 fi
 echo ""
 
