@@ -69,15 +69,15 @@ while getopts euhr:l:-: OPT; do
               echo ""
               this_script=$(realpath -s "$0")
               echo "Emplacement du script : "$this_script
-              if curl -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; then
+              if curl -H "Authorization: token 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" -H "Accept: application/vnd.github.v3.raw" -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; then
                 echo "Script disponible en ligne sur GitHub"
                 md5_local=`md5sum "$this_script" | cut -f1 -d" " 2>/dev/null`
-                md5_remote=`curl -s "$script_remote" | md5sum | cut -f1 -d" "`
+                md5_remote=`curl -H "Authorization: token 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" -H "Accept: application/vnd.github.v3.raw" -s "$script_remote" | md5sum | cut -f1 -d" "`
                 echo "MD5 local  : "$md5_local
                 echo "MD5 remote : "$md5_remote
                 if [[ "$md5_local" != "$md5_remote" ]]; then
                   echo "Une nouvelle version du script est disponible... en téléchargement"
-                  curl -s -m 3 --create-dir -o "$this_script" "$script_remote"
+                  curl -H "Authorization: token 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" -H "Accept: application/vnd.github.v3.raw" -s -m 3 --create-dir -o "$this_script" "$script_remote"
                   echo "Mise à jour terminée... exit"
                 else
                   echo "Le script est à jour... exit"
