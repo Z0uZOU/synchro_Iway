@@ -15,11 +15,12 @@ if [[ ! -d "$script_folder/logs" ]]; then
   mkdir -p "$script_folder/logs"
 fi
 date_log=`date +%Y-%m-%d`
-logfile=`echo $script_folder"/logs/"$date_log".log"`
-logfile_cmd="| tee -a $logfile"
-
+logfile_lftp=`echo $script_folder"/logs/"$date_log"_lftp.log"`
+logfile_display=`echo "| tee -a "$script_folder"/logs/"$date_log"_display.log"`
+REMOTEDIR="/McDonalds"
 EXCLUDED="-x Thumbs.db -x 'Licence NP6'"
-dependencies="lftpd"
+dependencies="curl lftp"
+
 
 #######################
 ## Advanced command arguments
@@ -83,12 +84,16 @@ while getopts euhr:l:-: OPT; do
     r | remote )
             needs_arg
             REMOTEDIR="$OPTARG"
-            echo -e "REMOTEDIR : "$REMOTEDIR
+            if [[ -f "$script_conf" ]]; then
+              sed -i 's|REMOTEDIR=.*|REMOTEDIR="'$REMOTEDIR'"|' $script_conf
+            fi
             ;;
     l | local )
             needs_arg
             LOCALDIR="$OPTARG"
-            echo -e "LOCALDIR : "$LOCALDIR
+            if [[ -f "$script_conf" ]]; then
+              sed -i 's|LOCALDIR=.*|LOCALDIR="'$LOCALDIR'"|' $script_conf
+            fi
             ;;
     e | edit-config )
             eval next_arg=\${$OPTIND}
@@ -116,15 +121,6 @@ while getopts euhr:l:-: OPT; do
 done
 shift $((OPTIND-1)) # remove parsed options and args from $@ list
 
-exit 1
-
-### Usage function
-function Usage()
-{
-  eval 'echo -e "\n  Synchronise un répertoire local avec un répertoire distant en utilisant LFTP"' $logfile_cmd;  
-  eval 'echo -e "  USAGE: ./synchro.sh local_dir remote_dir"' $logfile_cmd;
-  echo;
-}
 
 function downloading_loading() {
   pid="$*"
@@ -135,31 +131,29 @@ function downloading_loading() {
   tput civis # cursor invisible
   mon_printf="\r                                                                             "
   while kill -0 "$pid" 2>/dev/null; do
-    if [[ -f "$logfile" ]]; then
-	  folder=`cat "$logfile" | egrep "CWD path to be sent is" | tail -1 | sed "s/.*CWD path to be sent is .//" | sed "s/.$//"`
+    if [[ -f "$logfile_lftp" ]]; then
+      folder=`cat "$logfile_lftp" | egrep "CWD path to be sent is" | tail -1 | sed "s/.*CWD path to be sent is .//" | sed "s/.$//"`
       if [[ "$folder" != "$previous_folder" ]]; then
-#        echo "Folder : "$folder
         previous_folder=$folder
       fi
-	  file=`cat "$logfile" | egrep " RETR " | tail -1 | sed "s/.*RETR //"`
+      file=`cat "$logfile_lftp" | egrep " RETR " | tail -1 | sed "s/.*RETR //"`
       if [[ "$file" != "$previous_file" ]]; then
-#        echo "file : "$file
         previous_file=$file
-		printf "\r\n"
+        printf "\r\n"
       fi
-      folder_line=`cat "$logfile" | grep -n "$folder" | tail -1  | cut -d: -f1`
-      file_line=`cat "$logfile" | grep -n "$file" | tail -1  | cut -d: -f1`
+      folder_line=`cat "$logfile_lftp" | grep -n "$folder" | tail -1  | cut -d: -f1`
+      file_line=`cat "$logfile_lftp" | grep -n "$file" | tail -1  | cut -d: -f1`
       if [[ $folder_line -gt $file_line ]]; then
         file=""
       fi
-#      if [[ "$(echo -e "$progress" | awk '{ print $1 }')" == "RETR" ]]; then
-#        file=`echo $progress | sed "s/.*RETR //"`
-#        echo "File : "$file
-#	  fi
-
       if [[ "$folder" != "" ]] && [[ "$file" != "" ]]; then
-  	    i=$(((i+1) % ${#spin}))
-        printf "\r[${spin:$i:1}] Téléchargement de $folder/$file"
+        i=$(((i+1) % ${#spin}))
+        if [[ "${#folder} + ${#file}" -gt "65" ]]; then
+          print_file=`echo ${folder: -65}/$file | sed "s:[^\/]*\/:...\/:"`
+        else
+          print_file=`echo $folder/$file`        
+        fi
+        printf "\r[${spin:$i:1}] Téléchargement de $print_file"
         sleep .1
       fi
     fi
@@ -176,7 +170,7 @@ lon() ( echo $(( Lengh1 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 lon2() ( echo $(( Lengh2 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 
 
-eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"' $logfile_cmd
+eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"' $logfile_display
 
 
 ## UI tags
@@ -192,14 +186,14 @@ ui_tag_section="\e[44m[\u2263\u2263\u2263]\e[0m \e[44m \e[1m %-*s  \e[0m \e[44m 
 
 ### Configuration file
 if [[ ! -f "$script_conf" ]]; then
-  eval 'echo -e "$ui_tag_warning Fichier de conf absent, création du fichier de conf"' $logfile_cmd
+  eval 'echo -e "$ui_tag_warning Fichier de conf absent, création du fichier de conf"' $logfile_display
   touch "$script_conf"
   chmod 777 "$script_conf"
 cat <<EOT >> "$script_conf"
 ####################################
 ## Configuration
 ####################################
-  
+ 
 ##### Paramètres
 ## Dossier distant
 REMOTEDIR="$REMOTEDIR"
@@ -224,46 +218,76 @@ EOT
   eval 'echo -e "      Vous dever éditer le fichier \"$script_conf\" avant de poursuivre"' $mon_log_perso
   exit 1
 else
-  eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_cmd
+  eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_display
+  source "$script_conf"
 fi
+echo ""
 
 
 ### Check dependencies
-section_title="Checking dependencies"
-eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_cmd
+#section_title="Checking dependencies"
+section_title="Contrôle des dépendances"
+eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display
 for dependency in $dependencies ; do
   if command -v $dependency > /dev/null 2>/dev/null ; then
-    eval 'echo -e "$ui_tag_ok Dépendence: $dependency"' $logfile_cmd
+    eval 'echo -e "$ui_tag_ok Dépendence: $dependency"' $logfile_display
   else
-    eval 'echo -e "$ui_tag_bad Dépendence absente: $dependency"' $logfile_cmd
+    eval 'echo -e "$ui_tag_bad Dépendence absente: $dependency"' $logfile_display
     sudo apt install $dependency
   fi
 done
 echo ""
 
 
-
 ### Creation of folders
+section_title="Variables"
+eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display
 if [[ "$LOCALDIR" == "" ]]; then
-  eval 'echo -e "[\e[41m\u2717 \e[0m] Veuillez spécifier un répertoire local"' $logfile_cmd
-  Usage
+  eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire local\n"' $logfile_display
+  eval 'echo -e "      UTILISATION: ./synchro.sh -l local_dir"' $logfile_display;
+  eval 'echo -e "                ou ./synchro.sh -e"' $logfile_display;
   exit 1
 else
+  eval 'echo -e "$ui_tag_ok Répertoire local: $LOCALDIR"' $logfile_display
   if [[ "$REMOTEDIR" == "" ]]; then
-    eval 'echo -e "[\e[41m\u2717 \e[0m] Veuillez spécifier un répertoire distant"' $logfile_cmd
-    Usage
+    eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire distant\n"' $logfile_display
+    eval 'echo -e "      UTILISATION: ./synchro.sh -r remote_dir"' $logfile_display;
+    eval 'echo -e "                ou ./synchro.sh -e"' $logfile_display;
     exit 1
   fi
+  eval 'echo -e "$ui_tag_ok Répertoire distant: $REMOTEDIR"' $logfile_display
   mkdir -p "$LOCALDIR$REMOTEDIR" 2>/dev/null
 fi
+if [[ "$LOGIN" != "" ]] && [[ "$PASSWORD" != "" ]]; then
+  eval 'echo -e "$ui_tag_ok Utilisateur: $LOGIN"' $logfile_display
+  eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display
+else
+  if [[ "$LOGIN" == "" ]]; then
+    eval 'echo -e "$ui_tag_bad Utilisateur non renseigné"' $logfile_display
+    eval 'echo -e "      UTILISATION: ./synchro.sh -e"' $logfile_display;
+    eval 'echo -e "      ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display;
+  else
+    eval 'echo -e "$ui_tag_ok Utilisateur: $LOGIN"' $logfile_display
+  fi
+  if [[ "$PASSWORD" == "" ]]; then
+    eval 'echo -e "$ui_tag_bad Mot de passe non renseigné"' $logfile_display
+    eval 'echo -e "      UTILISATION: ./synchro.sh -e"' $logfile_display;
+    eval 'echo -e "      ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display;
+  else
+    eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display
+  fi
+  exit 1 
+fi
+echo ""
 
-echo "SYNCHRO..."
-exit 1
 
 ### Synchro launched
+section_title="Synchronistaion"
+eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display
 if [ -e "$LOCALDIR$REMOTEDIR" ]; then
 #  eval 'lftp -u $LOGIN,$PASSWORD $HOST -e "mirror $EXCLUDED $REMOTEDIR $LOCALDIR$REMOTEDIR ; quit"' $logfile_cmd
-  lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror $EXCLUDED $REMOTEDIR $LOCALDIR$REMOTEDIR ; quit" > $logfile 2>&1 & downloading_loading $!
+  lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror $EXCLUDED $REMOTEDIR $LOCALDIR$REMOTEDIR ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
+  chmod 777 -R $LOCALDIR$REMOTEDIR 2>/dev/null
+else
+  eval 'echo -e "$ui_tag_bad Dossier local non créé"' $logfile_display
 fi
-
-chmod 777 -R $LOCALDIR$REMOTEDIR 2>/dev/null
