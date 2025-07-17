@@ -324,6 +324,7 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
   lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror $EXCLUDED $REMOTEDIR $LOCALDIR$REMOTEDIR ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
   if [[ "$(cat $logfile_lftp | grep "Login failed")" != "" ]]; then
     eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display
+    push-message "synchro_Iway" "Synchronisation échouée" "1"
   else
     eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display
     push-message "synchro_Iway" "Synchronisation terminée"
