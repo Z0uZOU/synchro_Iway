@@ -296,10 +296,9 @@ echo ""
 section_title="Synchronistaion"
 eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display
 if [ -e "$LOCALDIR$REMOTEDIR" ]; then
-#  eval 'lftp -u $LOGIN,$PASSWORD $HOST -e "mirror $EXCLUDED $REMOTEDIR $LOCALDIR$REMOTEDIR ; quit"' $logfile_cmd
   lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror $EXCLUDED $REMOTEDIR $LOCALDIR$REMOTEDIR ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
   if [[ "$(cat $logfile_lftp | grep "Login failed")" != "" ]]; then
-    eval 'echo -e "$ui_tag_bad Connexion echouée : LOGIN et/ou PASSWORD incorect(s)"' $logfile_display
+    eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display
   else
     eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display
   fi
