@@ -22,7 +22,6 @@ EXCLUDED="-x Thumbs.db -x 'Licence NP6'"
 dependencies="curl lftp"
 
 
-#######################
 ## Check if this script is running
 check_dupe=$(ps -ef | grep "$0" | grep -v grep | wc -l | xargs)
 process_number="2"
@@ -33,7 +32,6 @@ if [[ "$check_dupe" > "$process_number" ]]; then
 fi
 
 
-#######################
 ## Advanced command arguments
 die() { echo "$*" >&2; exit 2; }  # complain to STDERR and exit with error
 needs_arg() { if [ -z "$OPTARG" ]; then die "No arg for --$OPT option"; fi; }
@@ -133,6 +131,7 @@ done
 shift $((OPTIND-1)) # remove parsed options and args from $@ list
 
 
+## Function to display download progress
 function downloading_loading() {
   pid="$*"
   previous_folder=""
@@ -184,6 +183,7 @@ lon2() ( echo $(( Lengh2 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"' $logfile_display
 executed_date=$(date)
 eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display
+
 
 ## UI tags
 ui_tag_write="[\e[43m \u270E \e[0m]"
