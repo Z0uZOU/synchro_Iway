@@ -131,6 +131,30 @@ done
 shift $((OPTIND-1)) # remove parsed options and args from $@ list
 
 
+## Push feature
+push-message() {
+  push_title=$1
+  push_content=$2
+  push_priority=$3
+  if [[ "$push_priority" == "" ]]; then
+    push_priority="-1"
+  fi
+  for user in {1..10}; do
+    target=`eval echo "\\$target_"$user`
+    if [ -n "$target" ]; then
+      curl -s \
+        --form-string "token=$token_app" \
+        --form-string "user=$target" \
+        --form-string "title=$push_title" \
+        --form-string "message=$push_content" \
+        --form-string "html=1" \
+        --form-string "priority=$push_priority" \
+        https://api.pushover.net/1/messages.json > /dev/null
+    fi
+  done
+}
+
+
 ## Function to display download progress
 function downloading_loading() {
   pid="$*"
@@ -220,7 +244,8 @@ PASSWORD=""
 #### Paramètre du push
 ## ces réglages se trouvent sur le site http://www.pushover.net
 token_app=""
-destinataire=""
+target_1=""
+target_2=""
  
 ####################################
 ## Fin de configuration
@@ -301,6 +326,7 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
     eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display
   else
     eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display
+    push-message "synchro_Iway" "Synchronisation terminée"
   fi
   chmod 777 -R $LOCALDIR$REMOTEDIR 2>/dev/null
 else
