@@ -16,7 +16,8 @@ if [[ ! -d "$script_folder/logs" ]]; then
 fi
 date_log=`date +%Y-%m-%d`
 logfile_lftp=`echo $script_folder"/logs/"$date_log"_lftp.log"`
-logfile_display=`echo "| tee -a "$script_folder"/logs/"$date_log"_display.log"`
+logfile_display=`echo $script_folder"/logs/"$date_log"_display.log"`
+logfile_display_cmd=`echo "| tee -a "$script_folder"/logs/"$date_log"_display.log"`
 REMOTEDIR="/McDonalds"
 EXCLUDED="-x Thumbs.db -x 'Licence NP6'"
 dependencies="curl lftp"
@@ -182,6 +183,10 @@ function downloading_loading() {
       fi
       if [[ "$folder" != "" ]] && [[ "$file" != "" ]]; then
         i=$(((i+1) % ${#spin}))
+        log_echo=`cat "$logfile_display" | egrep "$folder/$file"`
+        if [[ "$log_echo" == "" ]]; then
+          echo -e "[${spin:$i:1}] Téléchargement de $folder/$file" >> $logfile_display
+        fi
         if [[ "${#folder} + ${#file}" -gt "65" ]]; then
           print_file=`echo ${folder: -65}/$file | sed "s:[^\/]*\/:...\/:"`
         else
@@ -222,7 +227,7 @@ ui_tag_section="\e[44m[\u2263\u2263\u2263]\e[0m \e[44m \e[1m %-*s  \e[0m \e[44m 
 
 ### Configuration file
 if [[ ! -f "$script_conf" ]]; then
-  eval 'echo -e "$ui_tag_warning Fichier de conf absent, création du fichier de conf"' $logfile_display
+  eval 'echo -e "$ui_tag_warning Fichier de conf absent, création du fichier de conf"' $logfile_display_cmd
   touch "$script_conf"
   chmod 777 "$script_conf"
 cat <<EOT >> "$script_conf"
@@ -251,11 +256,11 @@ target_2=""
 ## Fin de configuration
 ####################################
 EOT
-  eval 'echo -e "$ui_tag_ok Fichier conf créé"' $mon_log_perso
-  eval 'echo -e "      Vous dever éditer le fichier \"$script_conf\" avant de poursuivre"' $mon_log_perso
+  eval 'echo -e "$ui_tag_ok Fichier conf créé"' $logfile_display_cmd
+  eval 'echo -e "      Vous dever éditer le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
   exit 1
 else
-  eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_display
+  eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_display_cmd
   source "$script_conf"
 fi
 echo ""
@@ -263,12 +268,12 @@ echo ""
 
 ### Check dependencies
 section_title="Contrôle des dépendances"
-eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display
+eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
 for dependency in $dependencies ; do
   if command -v $dependency > /dev/null 2>/dev/null ; then
-    eval 'echo -e "$ui_tag_ok Dépendence: $dependency"' $logfile_display
+    eval 'echo -e "$ui_tag_ok Dépendence: $dependency"' $logfile_display_cmd
   else
-    eval 'echo -e "$ui_tag_bad Dépendence absente: $dependency"' $logfile_display
+    eval 'echo -e "$ui_tag_bad Dépendence absente: $dependency"' $logfile_display_cmd
     sudo apt install $dependency
   fi
 done
@@ -277,40 +282,40 @@ echo ""
 
 ### Creation of folders
 section_title="Variables"
-eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display
+eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
 if [[ "$LOCALDIR" == "" ]]; then
-  eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire local\n"' $logfile_display
-  eval 'echo -e "      UTILISATION: ./"$script_name_full" -l local_dir"' $logfile_display;
-  eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display;
+  eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire local\n"' $logfile_display_cmd
+  eval 'echo -e "      UTILISATION: ./"$script_name_full" -l local_dir"' $logfile_display_cmd
+  eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display_cmd
   exit 1
 else
-  eval 'echo -e "$ui_tag_ok Répertoire local: $LOCALDIR"' $logfile_display
+  eval 'echo -e "$ui_tag_ok Répertoire local: $LOCALDIR"' $logfile_display_cmd
   if [[ "$REMOTEDIR" == "" ]]; then
-    eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire distant\n"' $logfile_display
-    eval 'echo -e "      UTILISATION: ./"$script_name_full" -r remote_dir"' $logfile_display;
-    eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display;
+    eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire distant\n"' $logfile_display_cmd
+    eval 'echo -e "      UTILISATION: ./"$script_name_full" -r remote_dir"' $logfile_display_cmd
+    eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display_cmd
     exit 1
   fi
-  eval 'echo -e "$ui_tag_ok Répertoire distant: $REMOTEDIR"' $logfile_display
+  eval 'echo -e "$ui_tag_ok Répertoire distant: $REMOTEDIR"' $logfile_display_cmd
   mkdir -p "$LOCALDIR/$REMOTEDIR" 2>/dev/null
 fi
 if [[ "$LOGIN" != "" ]] && [[ "$PASSWORD" != "" ]]; then
-  eval 'echo -e "$ui_tag_ok Utilisateur: $LOGIN"' $logfile_display
-  eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display
+  eval 'echo -e "$ui_tag_ok Utilisateur: $LOGIN"' $logfile_display_cmd
+  eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display_cmd
 else
   if [[ "$LOGIN" == "" ]]; then
-    eval 'echo -e "$ui_tag_bad Utilisateur non renseigné"' $logfile_display
-    eval 'echo -e "      UTILISATION: ./"$script_name_full" -e"' $logfile_display;
-    eval 'echo -e "      ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display;
+    eval 'echo -e "$ui_tag_bad Utilisateur non renseigné"' $logfile_display_cmd
+    eval 'echo -e "      UTILISATION: ./"$script_name_full" -e"' $logfile_display_cmd
+    eval 'echo -e "      ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
   else
-    eval 'echo -e "$ui_tag_ok Utilisateur: $LOGIN"' $logfile_display
+    eval 'echo -e "$ui_tag_ok Utilisateur: $LOGIN"' $logfile_display_cmd
   fi
   if [[ "$PASSWORD" == "" ]]; then
-    eval 'echo -e "$ui_tag_bad Mot de passe non renseigné"' $logfile_display
-    eval 'echo -e "      UTILISATION: ./"$script_name_full" -e"' $logfile_display;
-    eval 'echo -e "      ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display;
+    eval 'echo -e "$ui_tag_bad Mot de passe non renseigné"' $logfile_display_cmd
+    eval 'echo -e "      UTILISATION: ./"$script_name_full" -e"' $logfile_display_cmd
+    eval 'echo -e "      ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
   else
-    eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display
+    eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display_cmd
   fi
   exit 1
 fi
@@ -318,22 +323,22 @@ echo ""
 
 
 ### Synchro launched
-section_title="Synchronistaion"
-eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display
+section_title="Synchronisation"
+eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
 if [ -e "$LOCALDIR$REMOTEDIR" ]; then
   lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror $EXCLUDED $REMOTEDIR $LOCALDIR$REMOTEDIR ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
   if [[ "$(cat $logfile_lftp | grep "Login failed")" != "" ]]; then
-    eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display
+    eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display_cmd
     push-message "synchro_Iway" "Synchronisation échouée" "1"
   else
-    eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display
+    eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display_cmd
     push-message "synchro_Iway" "Synchronisation terminée"
   fi
   chmod 777 -R $LOCALDIR$REMOTEDIR 2>/dev/null
 else
-  eval 'echo -e "$ui_tag_bad Dossier local non créé"' $logfile_display
+  eval 'echo -e "$ui_tag_bad Dossier local non créé"' $logfile_display_cmd
 fi
 echo ""
 
 executed_date=$(date)
-eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display
+eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
