@@ -5,31 +5,22 @@ script_name=$(basename $0 | cut -d'.' -f1)
 script_name_cap=${script_name^^}
 script_name_full=$(basename $0)
 script_bin=$0
-script_conf=`echo $HOME"/.config/"$script_name"/"$script_name".conf"`
+script_conf="$HOME/.config/$script_name/$script_name.conf"
 script_remote="https://raw.githubusercontent.com/Z0uZOU/$script_name/main/$script_name_full"
 script_folder="$HOME/.config/$script_name"
-if [[ ! -d "$script_folder" ]]; then
-  mkdir -p "$script_folder"
-fi
-if [[ ! -d "$script_folder/logs" ]]; then
-  mkdir -p "$script_folder/logs"
-fi
-date_log=`date +%Y-%m-%d`
-logfile_pushover=`echo $script_folder"/logs/pushover.log"`
-logfile_lftp=`echo $script_folder"/logs/"$date_log"_lftp.log"`
-logfile_display=`echo $script_folder"/logs/"$date_log"_display.log"`
-logfile_display_cmd=`echo "| tee -a "$script_folder"/logs/"$date_log"_display.log"`
+if [[ ! -d "$script_folder" ]]; then mkdir -p "$script_folder"; fi
+if [[ ! -d "$script_folder/logs" ]]; then mkdir -p "$script_folder/logs"; fi
+date_log=$(date +%Y-%m-%d)
+logfile_pushover="$script_folder/logs/pushover.log"
+logfile_lftp="$script_folder/logs/${date_log}_lftp.log"
+logfile_display="$script_folder/logs/${date_log}_display.log"
+logfile_display_cmd="| tee -a $logfile_display"
 dependencies="curl lftp"
 
 
 ## Check if this script is running
-check_dupe=$(ps -ef | grep "$0" | grep -v grep | wc -l | xargs)
-process_number="2"
-if [[ "$check_dupe" > "$process_number" ]]; then
-  echo "Script déjà en cours d'exécution"
-  date
-  exit 1
-fi
+exec 200>/tmp/${script_name}.lock
+flock -n 200 || { echo "Script déjà en cours d'exécution"; exit 1; }
 
 
 ## Fix printf special char issue
@@ -40,28 +31,48 @@ lon2() ( echo $(( Lengh2 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 
 
 ## UI tags
-ui_tag_write="[\e[43m \u270E \e[0m]"
-ui_tag_checking="[\e[43m \u003F \e[0m]"
-ui_tag_encoding="[\e[7m \u238B \e[0m]"
-ui_tag_ok="[\e[42m \u2713 \e[0m]"
-ui_tag_ok_sed="[\\\e[42m \\\u2713 \\\e[0m]"
-ui_tag_bad="[\e[41m \u2713 \e[0m]"
-ui_tag_warning="[\e[43m \u2713 \e[0m]"
+ui_tag_ok="✅"
+ui_tag_bad="❌"
+ui_tag_warning="⚠️"
 ui_tag_section="\e[44m[\u2263\u2263\u2263]\e[0m \e[44m \e[1m %-*s  \e[0m \e[44m  \e[0m \e[44m \e[0m \e[34m\u2759\e[0m\n"
 
 
-## Advanced command arguments
-die() { echo "$*" >&2; exit 2; }  # complain to STDERR and exit with error
-needs_arg() { if [ -z "$OPTARG" ]; then die "No arg for --$OPT option"; fi; }
-
-while getopts euhr:l:-: OPT; do
-  # support long options: https://stackoverflow.com/a/28466267/519360
-  if [ "$OPT" = "-" ]; then   # long option: reformulate OPT and OPTARG
-    OPT="${OPTARG%%=*}"       # extract long option name
-    OPTARG="${OPTARG#$OPT}"   # extract long option argument (may be empty)
-    OPTARG="${OPTARG#=}"      # if long option argument, remove assigning `=`
+## Argument parser
+while getopts ceuhr:l:-: OPT; do
+  if [ "$OPT" = "-" ]; then
+    OPT="${OPTARG%%=*}"
+    OPTARG="${OPTARG#$OPT}"
+    OPTARG="${OPTARG#=}" 
   fi
   case "$OPT" in
+    c | check-config )
+            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
+            executed_date=$(date)
+            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+            echo -e "\033[1m$script_name_cap - Vérification de la configuration\033[0m"
+            source "$script_conf"
+            echo ""
+            config_ok=true
+            if [[ -z "$LOGIN" ]]; then echo "$ui_tag_bad LOGIN manquant"; config_ok=false; else echo "$ui_tag_ok LOGIN : $LOGIN"; fi
+            if [[ -z "$PASSWORD" ]]; then echo "$ui_tag_bad PASSWORD manquant"; config_ok=false; else echo "$ui_tag_ok Mot de passe renseigné"; fi
+            if [[ -z "$HOST" ]]; then echo "$ui_tag_bad HOST manquant"; config_ok=false; else echo "$ui_tag_ok Hôte FTP : $HOST"; fi
+            if [[ -z "$REMOTEDIR" ]]; then echo "$ui_tag_bad REMOTEDIR manquant"; config_ok=false; else echo "$ui_tag_ok Dossier distant : $REMOTEDIR"; fi
+            if [[ -z "$LOCALDIR" ]]; then echo "$ui_tag_bad LOCALDIR manquant"; config_ok=false; else echo "$ui_tag_ok Dossier local : $LOCALDIR"; fi
+            echo ""
+            if [[ "$config_ok" == false ]]; then
+              echo -e "\033[1;31mLa configuration est incomplète\033[0m"
+              echo ""
+              executed_date=$(date)
+              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+              exit 1
+            else
+              echo -e "\033[1;32mLa configuration est complète\033[0m"
+              echo ""
+              executed_date=$(date)
+              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+              exit 0
+            fi
+            ;;
     h | help )
             printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
             executed_date=$(date)
@@ -94,15 +105,15 @@ while getopts euhr:l:-: OPT; do
               echo ""
               this_script=$(realpath -s "$0")
               echo "Emplacement du script : "$this_script
-              if curl -H "Authorization: token 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" -H "Accept: application/vnd.github.v3.raw" -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; then
+              if curl -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; then
                 echo "Script disponible en ligne sur GitHub"
                 md5_local=`md5sum "$this_script" | cut -f1 -d" " 2>/dev/null`
-                md5_remote=`curl -H "Authorization: token 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" -H "Accept: application/vnd.github.v3.raw" -s "$script_remote" | md5sum | cut -f1 -d" "`
+                md5_remote=`curl -s "$script_remote" | md5sum | cut -f1 -d" "`
                 echo "MD5 local  : "$md5_local
                 echo "MD5 remote : "$md5_remote
                 if [[ "$md5_local" != "$md5_remote" ]]; then
                   echo "Une nouvelle version du script est disponible... Téléchargement en cours"
-                  curl -H "Authorization: token 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" -H "Accept: application/vnd.github.v3.raw" -s -m 3 --create-dir -o "$this_script" "$script_remote"
+                  curl -s -m 3 --create-dir -o "$this_script" "$script_remote"
                   echo "Mise à jour terminée..."
                 else
                   echo "Le script est à jour..."
@@ -252,7 +263,7 @@ function downloading_loading() {
           file_size=""
         fi
         log_line_prefix="Téléchargement de $folder/$file"
-        log_line_full="[${spin:$i:1}] $log_line_prefix $file_size"
+        log_line_full=" ${spin:$i:1} $log_line_prefix $file_size"
         if grep -qF "$log_line_prefix" "$logfile_display"; then
           sed -i "s|.*$log_line_prefix.*|$log_line_full|" "$logfile_display"
         else
@@ -262,7 +273,7 @@ function downloading_loading() {
           fi
           echo -e $folder/$file >> $logfile_pushover
         fi
-        printf "\r[${spin:$i:1}] Téléchargement de $print_file $file_size    "
+        printf "\r ${spin:$i:1} Téléchargement de $print_file $file_size    "
         sleep 0.1
       fi
     fi
@@ -358,20 +369,37 @@ eval 'echo ""' $logfile_display_cmd
 section_title="Contrôle des dépendances"
 eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
 for dependency in $dependencies ; do
-  if command -v $dependency > /dev/null 2>/dev/null ; then
-    eval 'echo -e "$ui_tag_ok Dépendence: $dependency"' $logfile_display_cmd
+  if ! command -v $dependency >/dev/null 2>&1 ; then
+    eval 'echo -e "$ui_tag_bad Dépendance absente: $dependency"' $logfile_display_cmd
+    if command -v apt >/dev/null 2>&1; then
+      read -p "Voulez-vous installer $dependency ? [o/N] " yn
+      if [[ "$yn" =~ ^[oO]$ ]]; then
+        sudo apt update && sudo apt install -y "$dependency"
+      else
+        eval 'echo "$ui_tag_bad Installation annulée pour : $dependency"' $logfile_display_cmd
+        eval 'echo ""' $logfile_display_cmd
+        executed_date=$(date)
+        eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+        exit 1
+      fi
+    else
+      eval 'echo "$ui_tag_bad Veuillez installer manuellement $dependency (apt non disponible)"' $logfile_display_cmd
+      eval 'echo ""' $logfile_display_cmd
+      executed_date=$(date)
+      eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+      exit 1
+    fi
   else
-    eval 'echo -e "$ui_tag_bad Dépendence absente: $dependency"' $logfile_display_cmd
-    sudo apt install $dependency
+    eval 'echo -e "$ui_tag_ok Dépendance: $dependency"' $logfile_display_cmd
   fi
 done
 
 
 ### Check update
 this_script=$(realpath -s "$0")
-if curl -H "Authorization: token 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" -H "Accept: application/vnd.github.v3.raw" -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; then
+if curl -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; then
   md5_local=`md5sum "$this_script" | cut -f1 -d" " 2>/dev/null`
-  md5_remote=`curl -H "Authorization: token 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" -H "Accept: application/vnd.github.v3.raw" -s "$script_remote" | md5sum | cut -f1 -d" "`
+  md5_remote=`curl -s "$script_remote" | md5sum | cut -f1 -d" "`
   if [[ "$md5_local" != "$md5_remote" ]]; then
     eval 'echo -e "$ui_tag_warning Une nouvelle version du script est disponible..."' $logfile_display_cmd
   else
@@ -389,8 +417,9 @@ section_title="Variables"
 eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
 if [[ "$LOCALDIR" == "" ]]; then
   eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire local\n"' $logfile_display_cmd
-  eval 'echo -e "      UTILISATION: ./"$script_name_full" -l local_dir"' $logfile_display_cmd
-  eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display_cmd
+  eval 'echo -e "   UTILISATION: ./"$script_name_full" -l local_dir"' $logfile_display_cmd
+  eval 'echo -e "             ou ./"$script_name_full" -e"' $logfile_display_cmd
+  eval 'echo -e "   ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
   eval 'echo ""' $logfile_display_cmd
   executed_date=$(date)
   eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
@@ -399,8 +428,9 @@ else
   eval 'echo -e "$ui_tag_ok Répertoire local: $LOCALDIR"' $logfile_display_cmd
   if [[ "$REMOTEDIR" == "" ]]; then
     eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire distant\n"' $logfile_display_cmd
-    eval 'echo -e "      UTILISATION: ./"$script_name_full" -r remote_dir"' $logfile_display_cmd
-    eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display_cmd
+    eval 'echo -e "   UTILISATION: ./"$script_name_full" -r remote_dir"' $logfile_display_cmd
+    eval 'echo -e "             ou ./"$script_name_full" -e"' $logfile_display_cmd
+    eval 'echo -e "   ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
     eval 'echo ""' $logfile_display_cmd
     executed_date=$(date)
     eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
@@ -415,15 +445,15 @@ if [[ "$LOGIN" != "" ]] && [[ "$PASSWORD" != "" ]]; then
 else
   if [[ "$LOGIN" == "" ]]; then
     eval 'echo -e "$ui_tag_bad Utilisateur non renseigné"' $logfile_display_cmd
-    eval 'echo -e "      UTILISATION: ./"$script_name_full" -e"' $logfile_display_cmd
-    eval 'echo -e "      ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
+    eval 'echo -e "   UTILISATION: ./"$script_name_full" -e"' $logfile_display_cmd
+    eval 'echo -e "   ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
   else
     eval 'echo -e "$ui_tag_ok Utilisateur: $LOGIN"' $logfile_display_cmd
   fi
   if [[ "$PASSWORD" == "" ]]; then
     eval 'echo -e "$ui_tag_bad Mot de passe non renseigné"' $logfile_display_cmd
-    eval 'echo -e "      UTILISATION: ./"$script_name_full" -e"' $logfile_display_cmd
-    eval 'echo -e "      ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
+    eval 'echo -e "   UTILISATION: ./"$script_name_full" -e"' $logfile_display_cmd
+    eval 'echo -e "   ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
   else
     eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display_cmd
   fi
