@@ -486,6 +486,10 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
   if [[ "$(cat $logfile_lftp | grep "Login failed")" != "" ]]; then
     eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display_cmd
     pushover_message=`echo -e "[ <b>SYNCHRONISATION ÉCHOUÉE</b> ]\nLOGIN et/ou PASSWORD incorect(s)"`
+    if [[ "$WEBHOOK_URL" != "" ]]; then
+      discord_message=$(echo -e "$pushover_message" | sed 's|<b>|**|g' | sed 's|</b>|**|g' | sed ':a;N;$!ba;s|\n|\\n|g')
+	  curl -H "Content-Type: application/json" -X POST -d "{\"content\": \"$discord_message\"}" "$WEBHOOK_URL"
+    fi
     push-message "synchro_Iway" "$pushover_message" "1"
   else
     eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display_cmd
@@ -509,7 +513,11 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
     else
       pushover_message=`echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\n$(cat $logfile_pushover)"`
     fi
-    push-message "synchro_Iway" "$pushover_message"
+    if [[ "$WEBHOOK_URL" != "" ]]; then
+      discord_message=$(echo -e "$pushover_message" | sed 's|<b>|**|g' | sed 's|</b>|**|g' | sed ':a;N;$!ba;s|\n|\\n|g')
+	  curl -H "Content-Type: application/json" -X POST -d "{\"content\": \"$discord_message\"}" "$WEBHOOK_URL"
+    fi
+	push-message "synchro_Iway" "$pushover_message"
   fi
   chmod 777 -R $LOCALDIR$REMOTEDIR 2>/dev/null
 else
