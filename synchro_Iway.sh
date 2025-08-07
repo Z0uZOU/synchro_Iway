@@ -33,6 +33,24 @@ if [[ "$check_dupe" > "$process_number" ]]; then
 fi
 
 
+## Fix printf special char issue
+Lengh1="55"
+Lengh2="61"
+lon() ( echo $(( Lengh1 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
+lon2() ( echo $(( Lengh2 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
+
+
+## UI tags
+ui_tag_write="[\e[43m \u270E \e[0m]"
+ui_tag_checking="[\e[43m \u003F \e[0m]"
+ui_tag_encoding="[\e[7m \u238B \e[0m]"
+ui_tag_ok="[\e[42m \u2713 \e[0m]"
+ui_tag_ok_sed="[\\\e[42m \\\u2713 \\\e[0m]"
+ui_tag_bad="[\e[41m \u2713 \e[0m]"
+ui_tag_warning="[\e[43m \u2713 \e[0m]"
+ui_tag_section="\e[44m[\u2263\u2263\u2263]\e[0m \e[44m \e[1m %-*s  \e[0m \e[44m  \e[0m \e[44m \e[0m \e[34m\u2759\e[0m\n"
+
+
 ## Advanced command arguments
 die() { echo "$*" >&2; exit 2; }  # complain to STDERR and exit with error
 needs_arg() { if [ -z "$OPTARG" ]; then die "No arg for --$OPT option"; fi; }
@@ -46,6 +64,9 @@ while getopts euhr:l:-: OPT; do
   fi
   case "$OPT" in
     h | help )
+            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
+            executed_date=$(date)
+            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             echo -e "\033[1m$script_name_cap - aide\033[0m"
             echo ""
             echo "Utilisation : $script_bin [option]"
@@ -58,9 +79,16 @@ while getopts euhr:l:-: OPT; do
             echo " -r [value] or --remote=[value]            : dossier distant"
             echo " -l [value] or --local=[value]             : dossier local"
             echo " -e [value*] or --edit-config=[value*]     : édition du fichier de configuration (défaut: nano)"
+            echo ""
+            
+            executed_date=$(date)
+            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             exit 0
             ;;
     u | update )
+            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
+            executed_date=$(date)
+            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             echo -e "\033[1m$script_name_cap - Mise à jour lancée\033[0m"
             read -n 1 -p "Voulez-vous continuer [o/N]:" yn
             printf "\r                                                     "
@@ -75,11 +103,11 @@ while getopts euhr:l:-: OPT; do
                 echo "MD5 local  : "$md5_local
                 echo "MD5 remote : "$md5_remote
                 if [[ "$md5_local" != "$md5_remote" ]]; then
-                  echo "Une nouvelle version du script est disponible... en téléchargement"
+                  echo "Une nouvelle version du script est disponible... Téléchargement en cours"
                   curl -H "Authorization: token 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" -H "Accept: application/vnd.github.v3.raw" -s -m 3 --create-dir -o "$this_script" "$script_remote"
-                  echo "Mise à jour terminée... exit"
+                  echo "Mise à jour terminée..."
                 else
-                  echo "Le script est à jour... exit"
+                  echo "Le script est à jour..."
                 fi
               else
                 echo ""
@@ -89,6 +117,10 @@ while getopts euhr:l:-: OPT; do
               echo ""
               echo "Rien n'a été fait"
             fi
+            echo ""
+            
+            executed_date=$(date)
+            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             exit 0
             ;;
     r | remote )
@@ -108,10 +140,26 @@ while getopts euhr:l:-: OPT; do
     e | edit-config )
             eval next_arg=\${$OPTIND}
             if [[ "$next_arg" == "" ]]; then
+              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
+              executed_date=$(date)
+              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               echo -e "\033[1m$script_name_cap - éditeur de configuration\033[0m"
               echo ""
               echo "Pas d'éditeur spécifié, utilisation par défaut (nano)"
               nano "$script_conf"
+              source "$script_conf"
+              section_title="Test de connexion au FTP"
+              printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"
+			  lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls $REMOTEDIR; bye" >/dev/null 2>&1
+              if [[ $? -ne 0 ]]; then
+                echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"
+              else
+                echo -e "$ui_tag_ok Connexion OK"
+              fi
+              echo ""
+              
+              executed_date=$(date)
+              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               exit 0
             else
               echo -e "\033[1m$script_name_cap - éditeur de configuration\033[0m"
@@ -119,9 +167,22 @@ while getopts euhr:l:-: OPT; do
               if command -v $next_arg ; then
                 echo "Édition du fichier avec: $next_arg"
                 $next_arg "$script_conf"
+                source "$script_conf"
+                section_title="Test de connexion au FTP"
+                printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"
+                lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls $REMOTEDIR; bye" >/dev/null 2>&1
+                if [[ $? -ne 0 ]]; then
+                  echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"
+                else
+                  echo -e "$ui_tag_ok Connexion OK"
+                fi
               else
                 echo "Il n'existe aucun logiciel appelé \"$next_arg\" installé"
               fi
+              echo ""
+              
+              executed_date=$(date)
+              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               exit 0
             fi
             ;;
@@ -167,33 +228,54 @@ function downloading_loading() {
   mon_printf="\r                                                                             "
   while kill -0 "$pid" 2>/dev/null; do
     if [[ -f "$logfile_lftp" ]]; then
-      folder=`cat "$logfile_lftp" | egrep "CWD path to be sent is" | tail -1 | sed "s/.*CWD path to be sent is .//" | sed "s/.$//"`
+      folder=$(grep "CWD path to be sent is" "$logfile_lftp" | tail -1 | sed -E 's/.*CWD path to be sent is .(.+).$/\1/')
+      
       if [[ "$folder" != "$previous_folder" ]]; then
         previous_folder=$folder
       fi
-      file=`cat "$logfile_lftp" | egrep " RETR " | tail -1 | sed "s/.*RETR //"`
+      
+      file=$(grep " RETR " "$logfile_lftp" | tail -1 | sed 's/.*RETR //')
+      
       if [[ "$file" != "$previous_file" ]]; then
         previous_file=$file
         printf "\r\n"
       fi
-      folder_line=`cat "$logfile_lftp" | grep -n "$folder" | tail -1  | cut -d: -f1`
-      file_line=`cat "$logfile_lftp" | grep -n "$file" | tail -1  | cut -d: -f1`
+      
+      folder_line=$(grep -n "$folder" "$logfile_lftp" | tail -1 | cut -d: -f1)
+      file_line=$(grep -n "$file" "$logfile_lftp" | tail -1 | cut -d: -f1)
+      
       if [[ $folder_line -gt $file_line ]]; then
         file=""
       fi
-      if [[ "$folder" != "" ]] && [[ "$file" != "" ]]; then
+      
+      if [[ -n "$folder" && -n "$file" ]]; then
         i=$(((i+1) % ${#spin}))
-        log_echo=`cat "$logfile_display" | egrep "$folder/$file"`
-        if [[ "$log_echo" == "" ]]; then
-          echo -e "[${spin:$i:1}] Téléchargement de $folder/$file" >> $logfile_display
-        fi
-        if [[ "${#folder} + ${#file}" -gt "65" ]]; then
-          print_file=`echo ${folder: -65}/$file | sed "s:[^\/]*\/:...\/:"`
+        
+        if (( ${#folder} + ${#file} > 50 )); then
+          print_file=$(echo "${folder: -50}/$file" | sed "s:[^/]*/:.../:")
         else
-          print_file=`echo $folder/$file`
+          print_file="$folder/$file"
         fi
-        printf "\r[${spin:$i:1}] Téléchargement de $print_file"
-        sleep .1
+        
+        file_path="$LOCALDIR$folder/$file"
+        if [[ -f "$file_path" ]]; then
+          file_size=$(stat -c%s "$file_path")
+          file_size=$(numfmt --to=iec "$file_size")
+        else
+          file_size=""
+        fi
+        
+        log_line_prefix="Téléchargement de $folder/$file"
+        log_line_full="[${spin:$i:1}] $log_line_prefix $file_size"
+
+        if grep -qF "$log_line_prefix" "$logfile_display"; then
+          sed -i "s|.*$log_line_prefix.*|$log_line_full|" "$logfile_display"
+        else
+          echo "$log_line_full" >> "$logfile_display"
+        fi
+        
+        printf "\r[${spin:$i:1}] Téléchargement de $print_file $file_size    "
+        sleep 0.1
       fi
     fi
   done
@@ -201,12 +283,39 @@ function downloading_loading() {
   printf "$mon_printf" && printf "\r"
 }
 
+## Automatic file renaming function if existing
+rename_if_exists() {
+    local file="$1"
 
-## Fix printf special char issue
-Lengh1="55"
-Lengh2="61"
-lon() ( echo $(( Lengh1 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
-lon2() ( echo $(( Lengh2 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
+    if [[ ! -e "$file" ]]; then
+        return 1
+    fi
+
+    local dir=$(dirname "$file")
+    local filename=$(basename "$file")
+    local base="${filename%.*}"
+    local ext="${filename##*.}"
+
+    if [[ "$base" == "$filename" ]]; then
+        ext=""
+    fi
+
+    local counter=1
+    local newfile="$file"
+
+    while [[ -e "$newfile" ]]; do
+        if [[ -z "$ext" || "$filename" == "$ext" ]]; then
+            newfile="${dir}/${base}.${counter}"
+        else
+            newfile="${dir}/${base}.${counter}.${ext}"
+        fi
+        ((counter++))
+    done
+
+    mv "$file" "$newfile"
+}
+rename_if_exists "$logfile_display"
+rename_if_exists "$logfile_lftp"
 
 
 eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"' $logfile_display_cmd
@@ -214,22 +323,11 @@ executed_date=$(date)
 eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
 
 
-## UI tags
-ui_tag_write="[\e[43m \u270E \e[0m]"
-ui_tag_checking="[\e[43m \u003F \e[0m]"
-ui_tag_encoding="[\e[7m \u238B \e[0m]"
-ui_tag_ok="[\e[42m \u2713 \e[0m]"
-ui_tag_ok_sed="[\\\e[42m \\\u2713 \\\e[0m]"
-ui_tag_bad="[\e[41m \u2713 \e[0m]"
-ui_tag_warning="[\e[43m \u2713 \e[0m]"
-ui_tag_section="\e[44m[\u2263\u2263\u2263]\e[0m \e[44m \e[1m %-*s  \e[0m \e[44m  \e[0m \e[44m \e[0m \e[34m\u2759\e[0m\n"
-
-
 ### Configuration file
 if [[ ! -f "$script_conf" ]]; then
   eval 'echo -e "$ui_tag_warning Fichier de conf absent, création du fichier de conf"' $logfile_display_cmd
   touch "$script_conf"
-  chmod 777 "$script_conf"
+  chmod 600 "$script_conf"
 cat <<EOT >> "$script_conf"
 ####################################
 ## Configuration
@@ -326,19 +424,26 @@ echo ""
 section_title="Synchronisation"
 eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
 if [ -e "$LOCALDIR$REMOTEDIR" ]; then
-  lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror $EXCLUDED $REMOTEDIR $LOCALDIR$REMOTEDIR ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
+  lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror --delete $EXCLUDED '$REMOTEDIR' '$LOCALDIR$REMOTEDIR' ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
   if [[ "$(cat $logfile_lftp | grep "Login failed")" != "" ]]; then
     eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display_cmd
     push-message "synchro_Iway" "Synchronisation échouée" "1"
   else
     eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display_cmd
+    log_cleaning=`grep '^---- remove(' "$logfile_lftp" | sed -E 's/^---- remove\((.*)\)/\1/' | sed "s|^$LOCALDIR||"`
+	if [[ "$log_cleaning" != "" ]]; then
+      eval 'echo -e "$ui_tag_ok Suppression des fichiers/dossiers absents du FTP"' $logfile_display_cmd
+      while IFS= read -r line; do
+        eval 'echo -e "      $line"' $logfile_display_cmd
+      done <<< "$log_cleaning"
+    fi
     push-message "synchro_Iway" "Synchronisation terminée"
   fi
   chmod 777 -R $LOCALDIR$REMOTEDIR 2>/dev/null
 else
   eval 'echo -e "$ui_tag_bad Dossier local non créé"' $logfile_display_cmd
 fi
-echo ""
+eval 'echo ""' $logfile_display_cmd
 
 executed_date=$(date)
 eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
