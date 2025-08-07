@@ -431,7 +431,7 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
   else
     eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display_cmd
     log_cleaning=`grep '^---- remove(' "$logfile_lftp" | sed -E 's/^---- remove\((.*)\)/\1/' | sed "s|^$LOCALDIR||"`
-	if [[ "$log_cleaning" != "" ]]; then
+    if [[ "$log_cleaning" != "" ]]; then
       eval 'echo -e "$ui_tag_ok Suppression des fichiers/dossiers absents du FTP"' $logfile_display_cmd
       while IFS= read -r line; do
         eval 'echo -e "      $line"' $logfile_display_cmd
