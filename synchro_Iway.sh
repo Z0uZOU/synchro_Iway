@@ -275,26 +275,22 @@ function downloading_loading() {
   printf "$mon_printf" && printf "\r"
 }
 
+
 ## Automatic file renaming function if existing
 rename_if_exists() {
     local file="$1"
-
     if [[ ! -e "$file" ]]; then
         return 1
     fi
-
     local dir=$(dirname "$file")
     local filename=$(basename "$file")
     local base="${filename%.*}"
     local ext="${filename##*.}"
-
     if [[ "$base" == "$filename" ]]; then
         ext=""
     fi
-
     local counter=1
     local newfile="$file"
-
     while [[ -e "$newfile" ]]; do
         if [[ -z "$ext" || "$filename" == "$ext" ]]; then
             newfile="${dir}/${base}.${counter}"
@@ -303,7 +299,6 @@ rename_if_exists() {
         fi
         ((counter++))
     done
-
     mv "$file" "$newfile"
 }
 rename_if_exists "$logfile_display"
