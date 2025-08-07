@@ -150,7 +150,7 @@ while getopts euhr:l:-: OPT; do
               source "$script_conf"
               section_title="Test de connexion au FTP"
               printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"
-			  lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls $REMOTEDIR; bye" >/dev/null 2>&1
+              lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls $REMOTEDIR; bye" >/dev/null 2>&1
               if [[ $? -ne 0 ]]; then
                 echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"
               else
