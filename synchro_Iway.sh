@@ -15,6 +15,7 @@ if [[ ! -d "$script_folder/logs" ]]; then
   mkdir -p "$script_folder/logs"
 fi
 date_log=`date +%Y-%m-%d`
+logfile_pushover=`echo $script_folder"/logs/pushover.log"`
 logfile_lftp=`echo $script_folder"/logs/"$date_log"_lftp.log"`
 logfile_display=`echo $script_folder"/logs/"$date_log"_display.log"`
 logfile_display_cmd=`echo "| tee -a "$script_folder"/logs/"$date_log"_display.log"`
@@ -227,34 +228,26 @@ function downloading_loading() {
   while kill -0 "$pid" 2>/dev/null; do
     if [[ -f "$logfile_lftp" ]]; then
       folder=$(grep "CWD path to be sent is" "$logfile_lftp" | tail -1 | sed -E 's/.*CWD path to be sent is .(.+).$/\1/')
-      
       if [[ "$folder" != "$previous_folder" ]]; then
         previous_folder=$folder
       fi
-      
       file=$(grep " RETR " "$logfile_lftp" | tail -1 | sed 's/.*RETR //')
-      
       if [[ "$file" != "$previous_file" ]]; then
         previous_file=$file
         printf "\r\n"
       fi
-      
       folder_line=$(grep -n "$folder" "$logfile_lftp" | tail -1 | cut -d: -f1)
       file_line=$(grep -n "$file" "$logfile_lftp" | tail -1 | cut -d: -f1)
-      
       if [[ $folder_line -gt $file_line ]]; then
         file=""
       fi
-      
       if [[ -n "$folder" && -n "$file" ]]; then
         i=$(((i+1) % ${#spin}))
-        
-        if (( ${#folder} + ${#file} > 50 )); then
-          print_file=$(echo "${folder: -50}/$file" | sed "s:[^/]*/:.../:")
+        if [[ ${#folder} > 60 ]]; then
+          print_file=$(echo "${folder: -20}/$file" | sed "s:[^/]*/:.../:")
         else
           print_file="$folder/$file"
         fi
-        
         file_path="$LOCALDIR$folder/$file"
         if [[ -f "$file_path" ]]; then
           file_size=$(stat -c%s "$file_path")
@@ -262,16 +255,17 @@ function downloading_loading() {
         else
           file_size=""
         fi
-        
         log_line_prefix="Téléchargement de $folder/$file"
         log_line_full="[${spin:$i:1}] $log_line_prefix $file_size"
-
         if grep -qF "$log_line_prefix" "$logfile_display"; then
           sed -i "s|.*$log_line_prefix.*|$log_line_full|" "$logfile_display"
         else
-          echo "$log_line_full" >> "$logfile_display"
+          echo "$log_line_full" >> $logfile_display
+          if [[ ! -e "$logfile_pushover" ]]; then
+            echo -e "<b>Téléchargement de :</b>" > $logfile_pushover
+          fi
+          echo -e $folder/$file >> $logfile_pushover
         fi
-        
         printf "\r[${spin:$i:1}] Téléchargement de $print_file $file_size    "
         sleep 0.1
       fi
@@ -436,6 +430,9 @@ echo ""
 section_title="Synchronisation"
 eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
 if [ -e "$LOCALDIR$REMOTEDIR" ]; then
+  if [[ -e "$logfile_pushover" ]]; then
+    rm "$logfile_pushover"
+  fi
   if [[ "$DELETEUSELESSFILES" == "yes" ]]; then
     eval 'echo -e "$ui_tag_ok Suppression des fichiers/dossiers inutiles activé"' $logfile_display_cmd
     lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror --delete $EXCLUDED '$REMOTEDIR' '$LOCALDIR$REMOTEDIR' ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
@@ -445,19 +442,31 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
   fi
   if [[ "$(cat $logfile_lftp | grep "Login failed")" != "" ]]; then
     eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display_cmd
-    push-message "synchro_Iway" "Synchronisation échouée" "1"
+    pushover_message=`echo -e "[ <b>SYNCHRONISATION ÉCHOUÉE</b> ]\nLOGIN et/ou PASSWORD incorect(s)"`
+    push-message "synchro_Iway" "$pushover_message" "1"
   else
     eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display_cmd
     if [[ "$DELETEUSELESSFILES" == "yes" ]]; then
       log_cleaning=`grep '^---- remove(' "$logfile_lftp" | sed -E 's/^---- remove\((.*)\)/\1/' | sed "s|^$LOCALDIR||"`
       if [[ "$log_cleaning" != "" ]]; then
         eval 'echo -e "$ui_tag_ok Suppression des fichiers/dossiers absents du FTP"' $logfile_display_cmd
+        if [[ ! -e "$logfile_pushover" ]]; then
+          echo -e "<b>Supression de :</b>" > $logfile_pushover
+        else
+          echo -e "<b>Supression de :</b>" >> $logfile_pushover
+        fi
         while IFS= read -r line; do
           eval 'echo -e "..... $line"' $logfile_display_cmd
+          echo -e $line >> $logfile_pushover
         done <<< "$log_cleaning"
       fi
     fi
-    push-message "synchro_Iway" "Synchronisation terminée"
+    if [[ ! -e "$logfile_pushover" ]]; then
+      pushover_message=`echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\nDisque dur à jour"`
+    else
+      pushover_message=`echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\n$(cat $logfile_pushover)"`
+    fi
+    push-message "synchro_Iway" "$pushover_message"
   fi
   chmod 777 -R $LOCALDIR$REMOTEDIR 2>/dev/null
 else
