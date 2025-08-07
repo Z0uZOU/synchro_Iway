@@ -18,9 +18,6 @@ date_log=`date +%Y-%m-%d`
 logfile_lftp=`echo $script_folder"/logs/"$date_log"_lftp.log"`
 logfile_display=`echo $script_folder"/logs/"$date_log"_display.log"`
 logfile_display_cmd=`echo "| tee -a "$script_folder"/logs/"$date_log"_display.log"`
-REMOTEDIR="/McDonalds"
-#EXCLUDED="-x Thumbs.db -x 'Licence NP6'"
-EXCLUDED="-x Thumbs.db"
 dependencies="curl lftp"
 
 
@@ -344,6 +341,8 @@ HOST="ged.interway.fr"
 ## Paramètres de connexion
 LOGIN=""
 PASSWORD=""
+DELETEUSELESSFILES="yes"
+EXCLUDED="-x Thumbs.db -x 'Licence NP6'"
  
 #### Paramètre du push
 ## ces réglages se trouvent sur le site http://www.pushover.net
@@ -386,6 +385,10 @@ if [[ "$LOCALDIR" == "" ]]; then
   eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire local\n"' $logfile_display_cmd
   eval 'echo -e "      UTILISATION: ./"$script_name_full" -l local_dir"' $logfile_display_cmd
   eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display_cmd
+  eval 'echo ""' $logfile_display_cmd
+  
+  executed_date=$(date)
+  eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
   exit 1
 else
   eval 'echo -e "$ui_tag_ok Répertoire local: $LOCALDIR"' $logfile_display_cmd
@@ -393,6 +396,10 @@ else
     eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire distant\n"' $logfile_display_cmd
     eval 'echo -e "      UTILISATION: ./"$script_name_full" -r remote_dir"' $logfile_display_cmd
     eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display_cmd
+    eval 'echo ""' $logfile_display_cmd
+    
+    executed_date=$(date)
+    eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
     exit 1
   fi
   eval 'echo -e "$ui_tag_ok Répertoire distant: $REMOTEDIR"' $logfile_display_cmd
@@ -416,6 +423,10 @@ else
   else
     eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display_cmd
   fi
+  eval 'echo ""' $logfile_display_cmd
+  
+  executed_date=$(date)
+  eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
   exit 1
 fi
 echo ""
@@ -425,18 +436,26 @@ echo ""
 section_title="Synchronisation"
 eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
 if [ -e "$LOCALDIR$REMOTEDIR" ]; then
-  lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror --delete $EXCLUDED '$REMOTEDIR' '$LOCALDIR$REMOTEDIR' ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
+  if [[ "$DELETEUSELESSFILES" == "yes" ]]; then
+    eval 'echo -e "$ui_tag_ok Suppression des fichiers/dossiers inutiles activé"' $logfile_display_cmd
+    lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror --delete $EXCLUDED '$REMOTEDIR' '$LOCALDIR$REMOTEDIR' ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
+  else
+    eval 'echo -e "$ui_tag_warning Suppression des fichiers/dossiers inutiles désactivé"' $logfile_display_cmd
+    lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror $EXCLUDED '$REMOTEDIR' '$LOCALDIR$REMOTEDIR' ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
+  fi
   if [[ "$(cat $logfile_lftp | grep "Login failed")" != "" ]]; then
     eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display_cmd
     push-message "synchro_Iway" "Synchronisation échouée" "1"
   else
     eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display_cmd
-    log_cleaning=`grep '^---- remove(' "$logfile_lftp" | sed -E 's/^---- remove\((.*)\)/\1/' | sed "s|^$LOCALDIR||"`
-    if [[ "$log_cleaning" != "" ]]; then
-      eval 'echo -e "$ui_tag_ok Suppression des fichiers/dossiers absents du FTP"' $logfile_display_cmd
-      while IFS= read -r line; do
-        eval 'echo -e "      $line"' $logfile_display_cmd
-      done <<< "$log_cleaning"
+    if [[ "$DELETEUSELESSFILES" == "yes" ]]; then
+      log_cleaning=`grep '^---- remove(' "$logfile_lftp" | sed -E 's/^---- remove\((.*)\)/\1/' | sed "s|^$LOCALDIR||"`
+      if [[ "$log_cleaning" != "" ]]; then
+        eval 'echo -e "$ui_tag_ok Suppression des fichiers/dossiers absents du FTP"' $logfile_display_cmd
+        while IFS= read -r line; do
+          eval 'echo -e "..... $line"' $logfile_display_cmd
+        done <<< "$log_cleaning"
+      fi
     fi
     push-message "synchro_Iway" "Synchronisation terminée"
   fi
