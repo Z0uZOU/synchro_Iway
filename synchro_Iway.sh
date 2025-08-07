@@ -79,7 +79,6 @@ while getopts euhr:l:-: OPT; do
             echo " -l [value] or --local=[value]             : dossier local"
             echo " -e [value*] or --edit-config=[value*]     : édition du fichier de configuration (défaut: nano)"
             echo ""
-            
             executed_date=$(date)
             printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             exit 0
@@ -117,7 +116,6 @@ while getopts euhr:l:-: OPT; do
               echo "Rien n'a été fait"
             fi
             echo ""
-            
             executed_date=$(date)
             printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             exit 0
@@ -156,7 +154,6 @@ while getopts euhr:l:-: OPT; do
                 echo -e "$ui_tag_ok Connexion OK"
               fi
               echo ""
-              
               executed_date=$(date)
               printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               exit 0
@@ -179,7 +176,6 @@ while getopts euhr:l:-: OPT; do
                 echo "Il n'existe aucun logiciel appelé \"$next_arg\" installé"
               fi
               echo ""
-              
               executed_date=$(date)
               printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               exit 0
@@ -396,7 +392,6 @@ if [[ "$LOCALDIR" == "" ]]; then
   eval 'echo -e "      UTILISATION: ./"$script_name_full" -l local_dir"' $logfile_display_cmd
   eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display_cmd
   eval 'echo ""' $logfile_display_cmd
-  
   executed_date=$(date)
   eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
   exit 1
@@ -407,7 +402,6 @@ else
     eval 'echo -e "      UTILISATION: ./"$script_name_full" -r remote_dir"' $logfile_display_cmd
     eval 'echo -e "                ou ./"$script_name_full" -e"' $logfile_display_cmd
     eval 'echo ""' $logfile_display_cmd
-    
     executed_date=$(date)
     eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
     exit 1
@@ -434,7 +428,6 @@ else
     eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display_cmd
   fi
   eval 'echo ""' $logfile_display_cmd
-  
   executed_date=$(date)
   eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
   exit 1
@@ -489,6 +482,5 @@ else
   eval 'echo -e "$ui_tag_bad Dossier local non créé"' $logfile_display_cmd
 fi
 eval 'echo ""' $logfile_display_cmd
-
 executed_date=$(date)
 eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
