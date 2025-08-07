@@ -350,6 +350,8 @@ EXCLUDED="-x Thumbs.db -x 'Licence NP6'"
 token_app=""
 target_1=""
 target_2=""
+## Webhook URL qui la prise en charge de Discord
+WEBHOOK_URL=""
  
 ####################################
 ## Fin de configuration
