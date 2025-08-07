@@ -374,7 +374,7 @@ section_title="Contrôle des dépendances"
 eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
 for dependency in $dependencies ; do
   if ! command -v $dependency >/dev/null 2>&1 ; then
-    eval 'echo -e "$ui_tag_bad Dépendance absente: $dependency"' $logfile_display_cmd
+    eval 'echo -e "$ui_tag_warning Dépendance absente: $dependency"' $logfile_display_cmd
     if command -v apt >/dev/null 2>&1; then
       read -p "Voulez-vous installer $dependency ? [o/N] " yn
       if [[ "$yn" =~ ^[oO]$ ]]; then
