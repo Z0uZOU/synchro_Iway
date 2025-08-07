@@ -19,7 +19,8 @@ logfile_lftp=`echo $script_folder"/logs/"$date_log"_lftp.log"`
 logfile_display=`echo $script_folder"/logs/"$date_log"_display.log"`
 logfile_display_cmd=`echo "| tee -a "$script_folder"/logs/"$date_log"_display.log"`
 REMOTEDIR="/McDonalds"
-EXCLUDED="-x Thumbs.db -x 'Licence NP6'"
+#EXCLUDED="-x Thumbs.db -x 'Licence NP6'"
+EXCLUDED="-x Thumbs.db"
 dependencies="curl lftp"
 
 
