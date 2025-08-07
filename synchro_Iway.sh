@@ -275,22 +275,26 @@ function downloading_loading() {
   printf "$mon_printf" && printf "\r"
 }
 
-
 ## Automatic file renaming function if existing
 rename_if_exists() {
     local file="$1"
+
     if [[ ! -e "$file" ]]; then
         return 1
     fi
+
     local dir=$(dirname "$file")
     local filename=$(basename "$file")
     local base="${filename%.*}"
     local ext="${filename##*.}"
+
     if [[ "$base" == "$filename" ]]; then
         ext=""
     fi
+
     local counter=1
     local newfile="$file"
+
     while [[ -e "$newfile" ]]; do
         if [[ -z "$ext" || "$filename" == "$ext" ]]; then
             newfile="${dir}/${base}.${counter}"
@@ -299,6 +303,7 @@ rename_if_exists() {
         fi
         ((counter++))
     done
+
     mv "$file" "$newfile"
 }
 rename_if_exists "$logfile_display"
@@ -364,6 +369,22 @@ for dependency in $dependencies ; do
     sudo apt install $dependency
   fi
 done
+
+
+### Check update
+this_script=$(realpath -s "$0")
+if curl -H "Authorization: token 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" -H "Accept: application/vnd.github.v3.raw" -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; then
+  md5_local=`md5sum "$this_script" | cut -f1 -d" " 2>/dev/null`
+  md5_remote=`curl -H "Authorization: token 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" -H "Accept: application/vnd.github.v3.raw" -s "$script_remote" | md5sum | cut -f1 -d" "`
+  if [[ "$md5_local" != "$md5_remote" ]]; then
+    eval 'echo -e "$ui_tag_warning Une nouvelle version du script est disponible..."' $logfile_display_cmd
+  else
+    eval 'echo -e "$ui_tag_ok Le script est à jour..."' $logfile_display_cmd
+  fi
+else
+  echo ""
+  eval 'echo -e "$ui_tag_bad Script hors ligne..."' $logfile_display_cmd
+fi
 eval 'echo ""' $logfile_display_cmd
 
 
