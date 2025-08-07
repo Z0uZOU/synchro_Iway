@@ -243,7 +243,7 @@ function downloading_loading() {
       fi
       if [[ -n "$folder" && -n "$file" ]]; then
         i=$(((i+1) % ${#spin}))
-        if [[ ${#folder} > 60 ]]; then
+        if [[ "${#folder} + ${#file}" -gt "65" ]]; then
           print_file=$(echo "${folder: -20}/$file" | sed "s:[^/]*/:.../:")
         else
           print_file="$folder/$file"
