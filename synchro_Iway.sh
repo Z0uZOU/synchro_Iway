@@ -355,7 +355,7 @@ else
   eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_display_cmd
   source "$script_conf"
 fi
-echo ""
+eval 'echo ""' $logfile_display_cmd
 
 
 ### Check dependencies
@@ -369,7 +369,7 @@ for dependency in $dependencies ; do
     sudo apt install $dependency
   fi
 done
-echo ""
+eval 'echo ""' $logfile_display_cmd
 
 
 ### Creation of folders
@@ -423,7 +423,7 @@ else
   eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
   exit 1
 fi
-echo ""
+eval 'echo ""' $logfile_display_cmd
 
 
 ### Synchro launched
