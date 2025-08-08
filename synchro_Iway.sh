@@ -18,11 +18,6 @@ logfile_display_cmd="| tee -a $logfile_display"
 dependencies="curl lftp"
 
 
-## Check if this script is running
-exec 200>/tmp/${script_name}.lock
-flock -n 200 || { echo "Script déjà en cours d'exécution"; exit 1; }
-
-
 ## Fix printf special char issue
 Lengh1="55"
 Lengh2="64"
@@ -38,7 +33,7 @@ ui_tag_section="\e[44m  \e[0m \e[44m \e[1m %-*s  \e[0m \e[44m  \e[0m \e[44m \e[0
 
 
 ## Argument parser
-while getopts ceuhr:l:-: OPT; do
+while getopts sceuhr:l:-: OPT; do
   if [ "$OPT" = "-" ]; then
     OPT="${OPTARG%%=*}"
     OPTARG="${OPTARG#$OPT}"
@@ -71,79 +66,6 @@ while getopts ceuhr:l:-: OPT; do
               executed_date=$(date)
               printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               exit 0
-            fi
-            ;;
-    h | help )
-            printf "\e[46m  \e[0m \e[46m \e[1m %-64s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
-            executed_date=$(date)
-            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
-            echo -e "\033[1m$script_name_cap - aide\033[0m"
-            echo ""
-            echo "Utilisation : $script_bin [option]"
-            echo ""
-            echo "Options disponibles:"
-            echo "[value*] signifie un argument facultatif"
-            echo ""
-            echo " -h or --help                              : ce menu d'aide"
-            echo " -c or --check-config                      : vérification du fichier de configuration"
-            echo " -e [value*] or --edit-config=[value*]     : édition du fichier de configuration (défaut: nano)"
-            echo " -l [value] or --local=[value]             : dossier local"
-            echo " -r [value] or --remote=[value]            : dossier distant"
-            echo " -u or --update                            : mise à jour du script"
-            echo ""
-            executed_date=$(date)
-            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
-            exit 0
-            ;;
-    u | update )
-            printf "\e[46m  \e[0m \e[46m \e[1m %-64s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
-            executed_date=$(date)
-            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
-            echo -e "\033[1m$script_name_cap - Mise à jour lancée\033[0m"
-            read -n 1 -p "Voulez-vous continuer [o/N]:" yn
-            printf "\r                                                     "
-            if [[ "${yn}" == @(o|O) ]]; then
-              echo ""
-              this_script=$(realpath -s "$0")
-              echo "Emplacement du script : "$this_script
-              if curl -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; then
-                echo "Script disponible en ligne sur GitHub"
-                md5_local=`md5sum "$this_script" | cut -f1 -d" " 2>/dev/null`
-                md5_remote=`curl -s "$script_remote" | md5sum | cut -f1 -d" "`
-                echo "MD5 local  : "$md5_local
-                echo "MD5 remote : "$md5_remote
-                if [[ "$md5_local" != "$md5_remote" ]]; then
-                  echo "Une nouvelle version du script est disponible... Téléchargement en cours"
-                  curl -s -m 3 --create-dir -o "$this_script" "$script_remote"
-                  echo "Mise à jour terminée..."
-                else
-                  echo "Le script est à jour..."
-                fi
-              else
-                echo ""
-                echo "Script hors ligne"
-              fi
-            else
-              echo ""
-              echo "Rien n'a été fait"
-            fi
-            echo ""
-            executed_date=$(date)
-            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
-            exit 0
-            ;;
-    r | remote )
-            needs_arg
-            REMOTEDIR="$OPTARG"
-            if [[ -f "$script_conf" ]]; then
-              sed -i 's|REMOTEDIR=.*|REMOTEDIR="'$REMOTEDIR'"|' $script_conf
-            fi
-            ;;
-    l | local )
-            needs_arg
-            LOCALDIR="$OPTARG"
-            if [[ -f "$script_conf" ]]; then
-              sed -i 's|LOCALDIR=.*|LOCALDIR="'$LOCALDIR'"|' $script_conf
             fi
             ;;
     e | edit-config )
@@ -193,11 +115,99 @@ while getopts ceuhr:l:-: OPT; do
               exit 0
             fi
             ;;
-    ??* )          die "Illegal option --$OPT" ;;  # bad long option
+    h | help )
+            printf "\e[46m  \e[0m \e[46m \e[1m %-64s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
+            executed_date=$(date)
+            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+            echo -e "\033[1m$script_name_cap - aide\033[0m"
+            echo ""
+            echo "Utilisation : $script_bin [option]"
+            echo ""
+            echo "Options disponibles:"
+            echo "[value*] signifie un argument facultatif"
+            echo ""
+            echo " -h or --help                              : ce menu d'aide"
+            echo " -c or --check-config                      : vérification du fichier de configuration"
+            echo " -e [value*] or --edit-config=[value*]     : édition du fichier de configuration (défaut: nano)"
+            echo " -l [value] or --local=[value]             : dossier local"
+            echo " -r [value] or --remote=[value]            : dossier distant"
+            echo " -s or --stop                              : force l'arrêt du script"
+            echo " -u or --update                            : mise à jour du script"
+            echo ""
+            executed_date=$(date)
+            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+            exit 0
+            ;;
+    l | local )
+            needs_arg
+            LOCALDIR="$OPTARG"
+            if [[ -f "$script_conf" ]]; then
+              sed -i 's|LOCALDIR=.*|LOCALDIR="'$LOCALDIR'"|' $script_conf
+            fi
+            ;;
+    r | remote )
+            needs_arg
+            REMOTEDIR="$OPTARG"
+            if [[ -f "$script_conf" ]]; then
+              sed -i 's|REMOTEDIR=.*|REMOTEDIR="'$REMOTEDIR'"|' $script_conf
+            fi
+            ;;
+    s | stop )
+            if [[ $(pgrep lftp) ]]; then
+              echo -e "Arrêt du script"
+              pgrep "$script_name|lftp" | grep -v "$$" | xargs kill -9 > /dev/null 2>&1
+            else
+              echo -e "Pas de synchro en cours"
+            fi
+            exit 0
+            ;;
+    u | update )
+            printf "\e[46m  \e[0m \e[46m \e[1m %-64s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
+            executed_date=$(date)
+            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+            echo -e "\033[1m$script_name_cap - Mise à jour lancée\033[0m"
+            read -n 1 -p "Voulez-vous continuer [o/N]:" yn
+            printf "\r                                                     "
+            if [[ "$yn" =~ ^[oO]$ ]]; then
+              echo ""
+              this_script=$(realpath -s "$0")
+              echo "Emplacement du script : "$this_script
+              if curl -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; then
+                echo "Script disponible en ligne sur GitHub"
+                md5_local=`md5sum "$this_script" | cut -f1 -d" " 2>/dev/null`
+                md5_remote=`curl -s "$script_remote" | md5sum | cut -f1 -d" "`
+                echo "MD5 local  : "$md5_local
+                echo "MD5 remote : "$md5_remote
+                if [[ "$md5_local" != "$md5_remote" ]]; then
+                  echo "Une nouvelle version du script est disponible... Téléchargement en cours"
+                  curl -s -m 3 --create-dir -o "$this_script" "$script_remote"
+                  echo "Mise à jour terminée..."
+                else
+                  echo "Le script est à jour..."
+                fi
+              else
+                echo ""
+                echo "Script hors ligne"
+              fi
+            else
+              echo ""
+              echo "Rien n'a été fait"
+            fi
+            echo ""
+            executed_date=$(date)
+            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+            exit 0
+            ;;
+    ??* )          die "Option illégale --$OPT" ;;  # bad long option
     ? )            exit 2 ;;  # bad short option (error reported via getopts)
   esac
 done
 shift $((OPTIND-1)) # remove parsed options and args from $@ list
+
+
+## Check if this script is running
+exec 200>/tmp/${script_name}.lock
+flock -n 200 || { echo "Script déjà en cours d'exécution"; exit 1; }
 
 
 ## Message feature
@@ -513,7 +523,7 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
       pushover_message=`echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\n💻 $(hostname)\n$(cat $logfile_pushover)"`
     fi
     if [[ -n "$WEBHOOK_URL" ]]; then discord-message "$pushover_message"; fi
-	push-message "$pushover_message"
+    push-message "$pushover_message"
   fi
   chmod 777 -R $LOCALDIR$REMOTEDIR 2>/dev/null
 else
