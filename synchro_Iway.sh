@@ -25,7 +25,7 @@ flock -n 200 || { echo "Script déjà en cours d'exécution"; exit 1; }
 
 ## Fix printf special char issue
 Lengh1="55"
-Lengh2="61"
+Lengh2="64"
 lon() ( echo $(( Lengh1 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 lon2() ( echo $(( Lengh2 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 
@@ -34,7 +34,7 @@ lon2() ( echo $(( Lengh2 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 ui_tag_ok="✅"
 ui_tag_bad="❌"
 ui_tag_warning="⚠️"
-ui_tag_section="\e[44m[\u2263\u2263\u2263]\e[0m \e[44m \e[1m %-*s  \e[0m \e[44m  \e[0m \e[44m \e[0m \e[34m\u2759\e[0m\n"
+ui_tag_section="\e[44m  \e[0m \e[44m \e[1m %-*s  \e[0m \e[44m  \e[0m \e[44m \e[0m \e[34m\u2759\e[0m\n"
 
 
 ## Argument parser
@@ -46,9 +46,9 @@ while getopts ceuhr:l:-: OPT; do
   fi
   case "$OPT" in
     c | check-config )
-            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
+            printf "\e[46m  \e[0m \e[46m \e[1m %-64s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
             executed_date=$(date)
-            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             echo -e "\033[1m$script_name_cap - Vérification de la configuration\033[0m"
             source "$script_conf"
             echo ""
@@ -63,20 +63,20 @@ while getopts ceuhr:l:-: OPT; do
               echo -e "\033[1;31mLa configuration est incomplète\033[0m"
               echo ""
               executed_date=$(date)
-              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+              printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               exit 1
             else
               echo -e "\033[1;32mLa configuration est complète\033[0m"
               echo ""
               executed_date=$(date)
-              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+              printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               exit 0
             fi
             ;;
     h | help )
-            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
+            printf "\e[46m  \e[0m \e[46m \e[1m %-64s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
             executed_date=$(date)
-            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             echo -e "\033[1m$script_name_cap - aide\033[0m"
             echo ""
             echo "Utilisation : $script_bin [option]"
@@ -85,19 +85,20 @@ while getopts ceuhr:l:-: OPT; do
             echo "[value*] signifie un argument facultatif"
             echo ""
             echo " -h or --help                              : ce menu d'aide"
-            echo " -u or --update                            : mise à jour du script"
-            echo " -r [value] or --remote=[value]            : dossier distant"
-            echo " -l [value] or --local=[value]             : dossier local"
+            echo " -c or --check-config                      : vérification du fichier de configuration"
             echo " -e [value*] or --edit-config=[value*]     : édition du fichier de configuration (défaut: nano)"
+            echo " -l [value] or --local=[value]             : dossier local"
+            echo " -r [value] or --remote=[value]            : dossier distant"
+            echo " -u or --update                            : mise à jour du script"
             echo ""
             executed_date=$(date)
-            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             exit 0
             ;;
     u | update )
-            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
+            printf "\e[46m  \e[0m \e[46m \e[1m %-64s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
             executed_date=$(date)
-            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             echo -e "\033[1m$script_name_cap - Mise à jour lancée\033[0m"
             read -n 1 -p "Voulez-vous continuer [o/N]:" yn
             printf "\r                                                     "
@@ -128,7 +129,7 @@ while getopts ceuhr:l:-: OPT; do
             fi
             echo ""
             executed_date=$(date)
-            printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+            printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             exit 0
             ;;
     r | remote )
@@ -148,9 +149,9 @@ while getopts ceuhr:l:-: OPT; do
     e | edit-config )
             eval next_arg=\${$OPTIND}
             if [[ "$next_arg" == "" ]]; then
-              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
+              printf "\e[46m  \e[0m \e[46m \e[1m %-64s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"
               executed_date=$(date)
-              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+              printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               echo -e "\033[1m$script_name_cap - éditeur de configuration\033[0m"
               echo ""
               echo "Pas d'éditeur spécifié, utilisation par défaut (nano)"
@@ -166,7 +167,7 @@ while getopts ceuhr:l:-: OPT; do
               fi
               echo ""
               executed_date=$(date)
-              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+              printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               exit 0
             else
               echo -e "\033[1m$script_name_cap - éditeur de configuration\033[0m"
@@ -188,7 +189,7 @@ while getopts ceuhr:l:-: OPT; do
               fi
               echo ""
               executed_date=$(date)
-              printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
+              printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               exit 0
             fi
             ;;
@@ -316,9 +317,9 @@ rename_if_exists "$logfile_display"
 rename_if_exists "$logfile_lftp"
 
 
-eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m \e[1m %-61s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"' $logfile_display_cmd
+eval 'printf "\e[46m  \e[0m \e[46m \e[1m %-64s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"' $logfile_display_cmd
 executed_date=$(date)
-eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
 
 
 ### Configuration file
@@ -361,7 +362,7 @@ EOT
   eval 'echo -e "   UTILISATION: ./"$script_name_full" -e"' $logfile_display_cmd
   eval 'echo ""' $logfile_display_cmd
   executed_date=$(date)
-  eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+  eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
   exit 1
 else
   eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_display_cmd
@@ -384,14 +385,14 @@ for dependency in $dependencies ; do
         eval 'echo "$ui_tag_bad Installation annulée pour : $dependency"' $logfile_display_cmd
         eval 'echo ""' $logfile_display_cmd
         executed_date=$(date)
-        eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+        eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
         exit 1
       fi
     else
       eval 'echo "$ui_tag_bad Veuillez installer manuellement $dependency (apt non disponible)"' $logfile_display_cmd
       eval 'echo ""' $logfile_display_cmd
       executed_date=$(date)
-      eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+      eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
       exit 1
     fi
   else
@@ -427,7 +428,7 @@ if [[ "$LOCALDIR" == "" ]]; then
   eval 'echo -e "   ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
   eval 'echo ""' $logfile_display_cmd
   executed_date=$(date)
-  eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+  eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
   exit 1
 else
   eval 'echo -e "$ui_tag_ok Répertoire local: $LOCALDIR"' $logfile_display_cmd
@@ -438,7 +439,7 @@ else
     eval 'echo -e "   ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
     eval 'echo ""' $logfile_display_cmd
     executed_date=$(date)
-    eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+    eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
     exit 1
   fi
   eval 'echo -e "$ui_tag_ok Répertoire distant: $REMOTEDIR"' $logfile_display_cmd
@@ -464,7 +465,7 @@ else
   fi
   eval 'echo ""' $logfile_display_cmd
   executed_date=$(date)
-  eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+  eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
   exit 1
 fi
 eval 'echo ""' $logfile_display_cmd
@@ -520,4 +521,4 @@ else
 fi
 eval 'echo ""' $logfile_display_cmd
 executed_date=$(date)
-eval 'printf "\e[46m\u23E5\u23E5   \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
