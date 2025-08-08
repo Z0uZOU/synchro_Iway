@@ -342,7 +342,7 @@ cat <<EOT >> "$script_conf"
 ## Configuration
 ####################################
  
-##### Paramètres
+#### Paramètres
 ## Dossier distant
 REMOTEDIR="$REMOTEDIR"
 ## Dossier local
@@ -355,12 +355,14 @@ PASSWORD=""
 DELETEUSELESSFILES="yes"
 EXCLUDED="-x Thumbs.db -x 'Licence NP6'"
  
-#### Paramètre du push
+#### Paramètres Pushover
 ## ces réglages se trouvent sur le site http://www.pushover.net
 token_app=""
 target_1=""
 target_2=""
-## Webhook URL qui la prise en charge de Discord
+ 
+#### Paramètre Discord
+## Webhook URL pour la prise en charge de Discord
 WEBHOOK_URL=""
  
 ####################################
