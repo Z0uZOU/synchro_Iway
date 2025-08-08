@@ -486,7 +486,7 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
   fi
   if [[ "$(cat $logfile_lftp | grep "Login failed")" != "" ]]; then
     eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display_cmd
-    pushover_message=`echo -e "[ <b>SYNCHRONISATION ÉCHOUÉE</b> ]\nLOGIN et/ou PASSWORD incorect(s)"`
+    pushover_message=`echo -e "[ <b>SYNCHRONISATION ÉCHOUÉE</b> ]\n💻 $(hostname)\nLOGIN et/ou PASSWORD incorect(s)"`
     if [[ -n "$WEBHOOK_URL" ]]; then discord-message "$pushover_message"; fi
     push-message "$pushover_message" "1"
   else
@@ -507,9 +507,9 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
       fi
     fi
     if [[ ! -e "$logfile_pushover" ]]; then
-      pushover_message=`echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\nDisque dur à jour"`
+      pushover_message=`echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\n💻 $(hostname)\nDisque dur à jour"`
     else
-      pushover_message=`echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\n$(cat $logfile_pushover)"`
+      pushover_message=`echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\n💻 $(hostname)\n$(cat $logfile_pushover)"`
     fi
     if [[ -n "$WEBHOOK_URL" ]]; then discord-message "$pushover_message"; fi
 	push-message "$pushover_message"
