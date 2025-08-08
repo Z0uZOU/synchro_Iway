@@ -199,11 +199,10 @@ done
 shift $((OPTIND-1)) # remove parsed options and args from $@ list
 
 
-## Push feature
+## Message feature
 push-message() {
-  push_title=$1
-  push_content=$2
-  push_priority=$3
+  push_content=$1
+  push_priority=$2
   if [[ "$push_priority" == "" ]]; then
     push_priority="-1"
   fi
@@ -213,13 +212,23 @@ push-message() {
       curl -s \
         --form-string "token=$token_app" \
         --form-string "user=$target" \
-        --form-string "title=$push_title" \
+        --form-string "title=$script_name" \
         --form-string "message=$push_content" \
         --form-string "html=1" \
         --form-string "priority=$push_priority" \
         https://api.pushover.net/1/messages.json > /dev/null
     fi
   done
+}
+discord-message() {
+  discord_message=$(echo -e "$1" \
+    | sed 's|<b>|**|g' \
+    | sed 's|</b>|**|g' \
+    | sed ':a;N;$!ba;s|\n|\\n|g')
+  curl -s -H "Content-Type: application/json" \
+    -X POST \
+    -d "{\"content\": \"${discord_message}\"}" \
+    "$WEBHOOK_URL" > /dev/null
 }
 
 
@@ -284,34 +293,24 @@ function downloading_loading() {
 
 ## Automatic file renaming function if existing
 rename_if_exists() {
-    local file="$1"
-
-    if [[ ! -e "$file" ]]; then
-        return 1
+  file="$1"
+  if [[ ! -e "$file" ]]; then return 1; fi
+  dir=$(dirname "$file")
+  filename=$(basename "$file")
+  base="${filename%.*}"
+  ext="${filename##*.}"
+  if [[ "$base" == "$filename" ]]; then ext="";  fi
+  counter=1
+  newfile="$file"
+  while [[ -e "$newfile" ]]; do
+    if [[ -z "$ext" || "$filename" == "$ext" ]]; then
+      newfile="${dir}/${base}.${counter}"
+    else
+      newfile="${dir}/${base}.${counter}.${ext}"
     fi
-
-    local dir=$(dirname "$file")
-    local filename=$(basename "$file")
-    local base="${filename%.*}"
-    local ext="${filename##*.}"
-
-    if [[ "$base" == "$filename" ]]; then
-        ext=""
-    fi
-
-    local counter=1
-    local newfile="$file"
-
-    while [[ -e "$newfile" ]]; do
-        if [[ -z "$ext" || "$filename" == "$ext" ]]; then
-            newfile="${dir}/${base}.${counter}"
-        else
-            newfile="${dir}/${base}.${counter}.${ext}"
-        fi
-        ((counter++))
-    done
-
-    mv "$file" "$newfile"
+    ((counter++))
+  done
+  mv "$file" "$newfile"
 }
 rename_if_exists "$logfile_display"
 rename_if_exists "$logfile_lftp"
@@ -488,11 +487,8 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
   if [[ "$(cat $logfile_lftp | grep "Login failed")" != "" ]]; then
     eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display_cmd
     pushover_message=`echo -e "[ <b>SYNCHRONISATION ÉCHOUÉE</b> ]\nLOGIN et/ou PASSWORD incorect(s)"`
-    if [[ "$WEBHOOK_URL" != "" ]]; then
-      discord_message=$(echo -e "$pushover_message" | sed 's|<b>|**|g' | sed 's|</b>|**|g' | sed ':a;N;$!ba;s|\n|\\n|g')
-	  curl -H "Content-Type: application/json" -X POST -d "{\"content\": \"$discord_message\"}" "$WEBHOOK_URL"
-    fi
-    push-message "synchro_Iway" "$pushover_message" "1"
+    if [[ -n "$WEBHOOK_URL" ]]; then discord-message "$pushover_message"; fi
+    push-message "$pushover_message" "1"
   else
     eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display_cmd
     if [[ "$DELETEUSELESSFILES" == "yes" ]]; then
@@ -515,11 +511,8 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
     else
       pushover_message=`echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\n$(cat $logfile_pushover)"`
     fi
-    if [[ "$WEBHOOK_URL" != "" ]]; then
-      discord_message=$(echo -e "$pushover_message" | sed 's|<b>|**|g' | sed 's|</b>|**|g' | sed ':a;N;$!ba;s|\n|\\n|g')
-	  curl -H "Content-Type: application/json" -X POST -d "{\"content\": \"$discord_message\"}" "$WEBHOOK_URL"
-    fi
-	push-message "synchro_Iway" "$pushover_message"
+    if [[ -n "$WEBHOOK_URL" ]]; then discord-message "$pushover_message"; fi
+	push-message "$pushover_message"
   fi
   chmod 777 -R $LOCALDIR$REMOTEDIR 2>/dev/null
 else
