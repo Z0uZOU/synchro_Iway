@@ -16,6 +16,7 @@ logfile_lftp="$script_folder/logs/${date_log}_lftp.log"
 logfile_display="$script_folder/logs/${date_log}_display.log"
 logfile_display_cmd="| tee -a $logfile_display"
 dependencies="curl lftp"
+REMOTEDIR="/McDonalds"
 
 
 ## Fix printf special char issue
