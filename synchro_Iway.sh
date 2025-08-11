@@ -255,6 +255,7 @@ function downloading_loading() {
   mon_printf="\r                                                                             "
   while kill -0 "$pid" 2>/dev/null; do
     if [[ -f "$logfile_lftp" ]]; then
+      i=$(((i+1) % ${#spin}))
       folder=$(grep "CWD path to be sent is" "$logfile_lftp" | tail -1 | sed -E 's/.*CWD path to be sent is .(.+).$/\1/')
       if [[ "$folder" != "$previous_folder" ]]; then
         previous_folder=$folder
@@ -270,7 +271,6 @@ function downloading_loading() {
         file=""
       fi
       if [[ -n "$folder" && -n "$file" ]]; then
-        i=$(((i+1) % ${#spin}))
         if [[ "${#folder} + ${#file}" -gt "65" ]]; then
           print_file=$(echo "${folder: -20}/$file" | sed "s:[^/]*/:.../:")
         else
@@ -295,8 +295,10 @@ function downloading_loading() {
           echo -e $folder/$file >> $logfile_pushover
         fi
         printf "\r ${spin:$i:1} Téléchargement de $print_file $file_size    "
-        sleep 0.1
+      else
+        printf "\r ${spin:$i:1} Téléchargement en cours ..."
       fi
+      sleep 0.1
     fi
   done
   tput cnorm
