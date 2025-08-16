@@ -154,11 +154,24 @@ while getopts sceuhr:l:-: OPT; do
             fi
             ;;
     s | stop )
-            if [[ $(pgrep lftp) ]]; then
-              echo -e "Arrêt du script"
-              pgrep "$script_name|lftp" | grep -v "$$" | xargs kill -9 > /dev/null 2>&1
+            if pgrep -x lftp >/dev/null 2>&1; then
+              echo "Arrêt du script"
+              mapfile -t pids < <(pgrep -f "(${script_name}|lftp)" 2>/dev/null || true)
+              for bad in "$$" "$BASHPID" "$PPID"; do
+                for i in "${!pids[@]}"; do
+                  [[ "${pids[i]}" == "$bad" ]] && unset 'pids[i]'
+                done
+              done
+              if ((${#pids[@]})); then
+                readarray -t pids < <(printf "%s\n" "${pids[@]}" | awk 'NF' | sort -u)
+              fi
+              if ((${#pids[@]})); then
+                kill -TERM "${pids[@]}" 2>/dev/null
+                sleep 1
+                kill -KILL "${pids[@]}" 2>/dev/null
+              fi
             else
-              echo -e "Pas de synchro en cours"
+              echo "Pas de synchro en cours"
             fi
             exit 0
             ;;
@@ -244,66 +257,177 @@ discord-message() {
 }
 
 
-## Function to display download progress
+## Function to display download progress (clean terminal line clearing, no pushover dupes)
 function downloading_loading() {
-  pid="$*"
-  previous_folder=""
-  previous_file=""
-  spin='⣾⣽⣻⢿⡿⣟⣯⣷'
-  i=0
+  local pid="$*"
+  local previous_file=""
+  local last_done_key=""      # évite d'imprimer plusieurs fois le même "terminé"
+  local spin='⣾⣽⣻⢿⡿⣟⣯⣷'
+  local i=0
   tput civis # cursor invisible
-  mon_printf="\r                                                                             "
+
+  # Efface la ligne courante et revient au début (ANSI)
+  # Variante portable: EL="$(tput el 2>/dev/null || printf '\033[K')"; CLR=$'\r'"$EL"
+  local CLR=$'\r\033[2K'
+
   while kill -0 "$pid" 2>/dev/null; do
     if [[ -f "$logfile_lftp" ]]; then
       i=$(((i+1) % ${#spin}))
-      folder=$(grep "CWD path to be sent is" "$logfile_lftp" | tail -1 | sed -E 's/.*CWD path to be sent is .(.+).$/\1/')
-      if [[ "$folder" != "$previous_folder" ]]; then
-        previous_folder=$folder
+
+      IFS=$'\t' read -r folder_line file_line folder file done_flag < <(
+        awk -v OFS='\t' '
+          function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/,"",s); return s }
+          function isq(c){ return (c=="\"" || c=="`" || c==sprintf("%c",39)) }
+          function strip_outer_quotes(s,   c1,cN){
+            while (length(s)>0) {
+              c1 = substr(s,1,1); cN = substr(s,length(s),1)
+              if (isq(c1)) s = substr(s,2)
+              else if (isq(cN)) s = substr(s,1,length(s)-1)
+              else break
+            }
+            return s
+          }
+          BEGIN { last_completed=0; cwd=""; cwd_line=0; last_file_line=0 }
+          /CWD path to be sent is/ {
+            s = $0
+            sub(/.*CWD path to be sent is[ \t]+/, "", s)
+            cwd = strip_outer_quotes(trim(s))
+            cwd_line = NR
+            next
+          }
+          /(^|[ \t])RETR[ \t]+/ {
+            f = $0
+            sub(/.*RETR[ \t]+/, "", f)
+            f = strip_outer_quotes(trim(f))
+            if (cwd_line && cwd_line < NR) {
+              last_cwd = cwd
+              last_cwd_line = cwd_line
+              last_file = f
+              last_file_line = NR
+              last_completed = 0
+            }
+            next
+          }
+          /(^|[^0-9])226([^0-9]|$)/ { if (last_file_line) last_completed=1; next }
+          /Transfer complete/       { if (last_file_line) last_completed=1; next }
+          END { if (last_file_line) print last_cwd_line, last_file_line, last_cwd, last_file, last_completed }
+        ' "$logfile_lftp"
+      )
+
+      # rien d'exploitable -> spinner générique
+      if [[ -z "$file_line" || -z "$folder" || -z "$file" ]]; then
+        printf "%s %s Téléchargement en cours ..." "$CLR" "${spin:$i:1}"
+        sleep 0.1
+        continue
       fi
-      file=$(grep " RETR " "$logfile_lftp" | tail -1 | sed 's/.*RETR //')
+
+      # nettoyage sécurité
+      folder="${folder//\`/}"; folder="${folder//\"/}"; folder="${folder//\'/}"
+      file="${file//\`/}";     file="${file//\"/}";     file="${file//\'/}"
+
+      # nouveau fichier -> autoriser une future ligne "terminé"
       if [[ "$file" != "$previous_file" ]]; then
-        previous_file=$file
-        printf "\r\n"
+        previous_file="$file"
+        last_done_key=""
+        # on laisse le terminal gérer la même ligne (pas de \n ici)
       fi
-      folder_line=$(grep -n "$folder" "$logfile_lftp" | tail -1 | cut -d: -f1)
-      file_line=$(grep -n "$file" "$logfile_lftp" | tail -1 | cut -d: -f1)
-      if [[ $folder_line -gt $file_line ]]; then
-        file=""
+
+      # Construire le chemin complet
+      local full_path="$folder/$file"
+
+      if (( ${#full_path} > 65 )); then
+        # Découper en parties
+        IFS='/' read -r -a parts <<< "$folder"
+        local reduced=""
+        local skip_done=0
+      
+        for (( idx=0; idx<${#parts[@]}; idx++ )); do
+          if (( skip_done == 0 )); then
+            # On teste si en gardant cette partie, plus le reste, ça dépasse 65
+            local candidate="$reduced/${parts[idx]}"
+            local remaining=""
+            for (( j=idx+1; j<${#parts[@]}; j++ )); do
+              remaining="$remaining/${parts[j]}"
+            done
+            remaining="$remaining/$file"
+            local candidate_full="$candidate$remaining"
+            if (( ${#candidate_full} > 65 )); then
+              # On remplace cette partie par "..."
+              reduced="$reduced/..."
+              skip_done=1
+            else
+              reduced="$candidate"
+            fi
+          else
+            reduced="$reduced/${parts[idx]}"
+          fi
+        done
+        print_file="$reduced/$file"
+      else
+        print_file="$full_path"
       fi
-      if [[ -n "$folder" && -n "$file" ]]; then
-        if [[ "${#folder} + ${#file}" -gt "65" ]]; then
-          print_file=$(echo "${folder: -20}/$file" | sed "s:[^/]*/:.../:")
-        else
-          print_file="$folder/$file"
+
+      # taille locale si dispo
+      local file_path="$LOCALDIR$folder/$file"
+      local file_size=""
+      if [[ -f "$file_path" ]]; then
+        file_size=$(numfmt --to=iec "$(stat -c%s "$file_path")")
+      fi
+
+      local log_line_prefix="Téléchargement de $folder/$file"
+      local log_line_full=" ${spin:$i:1} $log_line_prefix $file_size"
+      local done_key="$folder/$file"
+
+      if [[ "$done_flag" == "1" ]]; then
+        # TERMINÉ : NE PAS DOUBLER (terminal/display), et pushover uniquement ici
+        if [[ "$last_done_key" != "$done_key" ]]; then
+          last_done_key="$done_key"
+
+          # Terminal : efface la ligne et affiche "terminé" + saut de ligne
+          printf "%s✔  Téléchargement terminé : %s %s\n" "$CLR" "$print_file" "$file_size"
+
+          # display.log : remplacer la ligne live si présente, sinon ajouter
+          if grep -qF "$log_line_prefix" "$logfile_display" 2>/dev/null; then
+            sed -i "s|.*$log_line_prefix.*|✔ Téléchargement terminé : $folder/$file $file_size|" "$logfile_display"
+          else
+            echo "✔ Téléchargement terminé : $folder/$file $file_size" >> "$logfile_display"
+          fi
+
+          # pushover : ajouter UNIQUEMENT au moment du succès (sans doublon)
+          if [[ ! -e "$logfile_pushover" ]]; then
+            echo -e "<b>Téléchargements terminés :</b>" > "$logfile_pushover"
+          fi
+          if ! grep -qxF "$folder/$file" "$logfile_pushover" 2>/dev/null; then
+            echo -e "$folder/$file" >> "$logfile_pushover"
+          fi
         fi
-        file_path="$LOCALDIR$folder/$file"
-        if [[ -f "$file_path" ]]; then
-          file_size=$(stat -c%s "$file_path")
-          file_size=$(numfmt --to=iec "$file_size")
-        else
-          file_size=""
-        fi
-        log_line_prefix="Téléchargement de $folder/$file"
-        log_line_full=" ${spin:$i:1} $log_line_prefix $file_size"
-        if grep -qF "$log_line_prefix" "$logfile_display"; then
+
+        # entre deux téléchargements, afficher un spinner générique propre
+        printf "%s %s Téléchargement en cours ...   " "$CLR" "${spin:$i:1}"
+      else
+        # EN COURS : terminal -> spinner live (ligne proprement nettoyée)
+        printf "%s %s Téléchargement de %s %s    " "$CLR" "${spin:$i:1}" "$print_file" "$file_size"
+
+        # display.log : maintenir UNE ligne live (update si déjà présente)
+        if grep -qF "$log_line_prefix" "$logfile_display" 2>/dev/null; then
           sed -i "s|.*$log_line_prefix.*|$log_line_full|" "$logfile_display"
         else
-          echo "$log_line_full" >> $logfile_display
-          if [[ ! -e "$logfile_pushover" ]]; then
-            echo -e "<b>Téléchargement de :</b>" > $logfile_pushover
-          fi
-          echo -e $folder/$file >> $logfile_pushover
+          echo "$log_line_full" >> "$logfile_display"
         fi
-        printf "\r ${spin:$i:1} Téléchargement de $print_file $file_size    "
-      else
-        printf "\r ${spin:$i:1} Téléchargement en cours ..."
+
+        # Pushover : **rien** en cours (on n'ajoute qu'à la fin)
       fi
+
+      sleep 0.1
+    else
+      i=$(((i+1) % ${#spin}))
+      printf "%s %s Téléchargement en cours ..." "$CLR" "${spin:$i:1}"
       sleep 0.1
     fi
   done
   tput cnorm
-  printf "$mon_printf" && printf "\r"
 }
+
 
 ## Automatic file renaming function if existing
 rename_if_exists() {
