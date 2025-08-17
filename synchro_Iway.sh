@@ -264,6 +264,7 @@ function downloading_loading() {
   local last_done_key=""
   local spin='⣾⣽⣻⢿⡿⣟⣯⣷'
   local i=0
+  tput civis # cursor invisible
 
   # ------ Terminal formatting (stderr) ------
   local CLR=$'\r\033[2K'      # clear whole line + CR
@@ -424,6 +425,7 @@ function downloading_loading() {
       sleep 0.1
     fi
   done
+  tput cnorm
 }
 
 
