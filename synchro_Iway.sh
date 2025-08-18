@@ -257,24 +257,21 @@ discord-message() {
 }
 
 
+## Liste globale des fichiers incomplets (chemins distants)
+RETRY_LIST=()
+
+
 ## Function to display download progress
 function downloading_loading() {
   local pid="$*"
-  local previous_file=""
-  local last_done_key=""
-  local spin='⣾⣽⣻⢿⡿⣟⣯⣷'
-  local i=0
-  tput civis # cursor invisible
-
-  # ------ Terminal formatting (stderr) ------
-  local CLR=$'\r\033[2K'      # clear whole line + CR
-  local GREEN=$'\033[0;32m'   # green
+  # Set for completed files we already logged (associative array)
+  declare -gA __SEEN_COMPLETED=()
+  local spin='⣾⣽⣻⢿⡿⣟⣯⣷' i=0
+  tput civis
+  local CLR=$'\r\033[2K'
+  local GREEN=$'\033[0;32m'
+  local RED=$'\033[0;31m'
   local RESET=$'\033[0m'
-  # ------------------------------------------
-
-  # ------ Helpers ------
-  # Remplace la ligne qui commence (après espaces) par "token" par "newline", sinon ajoute en fin.
-  # Comparaison LITTÉRALE (pas de regex), résiste aux espaces, &, \9, (), etc.
   replace_or_append_line() {
     local file="$1" token="$2" newline="$3"
     local tmp="${file}.tmp.$$"
@@ -288,11 +285,13 @@ function downloading_loading() {
       END{ if (!done) print newline }
     ' "$file" > "$tmp" && mv -- "$tmp" "$file"
   }
-
-  # Affichage terminal compact: ".../<derniers dossiers>/Fichier" (≤ limit), sans tronquer de dossier.
-  # Si le nom de fichier seul dépasse, on tronque le NOM DE FICHIER au milieu (en gardant l’extension).
   shorten_path_term() {
     local folder="$1" file="$2" limit="${3:-65}"
+    local full="$folder/$file"
+    if (( ${#full} <= limit )); then
+      printf '%s' "$full"
+      return
+    fi
     IFS='/' read -ra raw <<< "$folder"
     local parts=() seg
     for seg in "${raw[@]}"; do [[ -n "$seg" ]] && parts+=("$seg"); done
@@ -316,142 +315,228 @@ function downloading_loading() {
     fi
     printf '%s' ".../$right"
   }
-  # ---------------------
-
+  # Minimal helpers (fallback if not already defined)
+  wait_local_stable() {
+    local path="$1" checks=3 delay=1
+    [[ -f "$path" ]] || return 1
+    local prev=-1 cur i
+    for (( i=0; i<checks; i++ )); do
+      cur=$(stat -c '%s' -- "$path" 2>/dev/null || echo -1)
+      (( cur <= 0 )) && return 1
+      if (( prev >= 0 && cur != prev )); then
+        prev="$cur"; sleep "$delay"; ((i--)); continue
+      fi
+      prev="$cur"; sleep "$delay"
+    done
+    return 0
+  }
+  verify_download() {
+    local local_file="$1"
+    [[ -f "$local_file" ]] || return 1
+    wait_local_stable "$local_file" || return 1
+    return 0
+  }
   while kill -0 "$pid" 2>/dev/null; do
     if [[ -f "$logfile_lftp" ]]; then
       i=$(((i+1) % ${#spin}))
+      # 1) Parse ALL completed transfers (RETR ... then 226/Transfer complete), with their last CWD
+      #    Emit one line per completed file (folder<TAB>file)
+      while IFS=$'\t' read -r folder file; do
+        # Normalize quotes/backslashes
+        folder="${folder//\`/}"; folder="${folder//\"/}"; folder="${folder//\'/}"
+        file="${file//\`/}";     file="${file//\"/}";     file="${file//\'/}"
+        folder="${folder//\\//}"
+        file="${file//\\//}"
 
-      # Parse: dernier CWD avant dernier RETR + flag de fin
-      IFS=$'\t' read -r folder_line file_line folder file done_flag < <(
+        # >>> Guard: ignore incomplete entries that would generate "/"
+        if [[ -z "$folder" || -z "$file" ]]; then
+          continue
+        fi
+        local remote_path="$folder/$file"
+        # Skip if already handled
+        if [[ -n "${__SEEN_COMPLETED[$remote_path]}" ]]; then
+          continue
+        fi
+        local print_file; print_file="$(shorten_path_term "$folder" "$file" 65)"
+        local local_path="$LOCALDIR$remote_path"
+        local size_h="~"; [[ -f "$local_path" ]] && size_h=$(numfmt --to=iec "$(stat -c%s "$local_path")")
+        if verify_download "$local_path"; then
+          printf "%s%s✔%s  Téléchargement terminé : %s %s\n" "$CLR" "$GREEN" "$RESET" "$print_file" "$size_h" >&2
+          replace_or_append_line "$logfile_display" \
+            "Téléchargement de $remote_path" \
+            "✔ Téléchargement terminé : $remote_path $size_h"
+          __SEEN_COMPLETED["$remote_path"]=1
+          # --- Pushover: log aussi les téléchargements terminés ---
+          if [[ -n "$logfile_pushover" ]]; then
+            if [[ ! -e "$logfile_pushover" ]]; then
+              echo -e "<b>Téléchargements :</b>" > "$logfile_pushover"
+            elif ! grep -q "<b>Téléchargements :</b>" "$logfile_pushover" 2>/dev/null; then
+              echo -e "<b>Téléchargements :</b>" >> "$logfile_pushover"
+            fi
+            echo -e "$remote_path ($size_h)" >> "$logfile_pushover"
+          fi
+        else
+          printf "%s%s✖%s  Téléchargement incomplet : %s\n" "$CLR" "$RED" "$RESET" "$print_file" >&2
+          RETRY_LIST+=("$remote_path")
+          replace_or_append_line "$logfile_display" \
+            "Téléchargement de $remote_path" \
+            "✖ Téléchargement incomplet : $remote_path"
+        fi
+      done < <(
         awk -v OFS='\t' '
           function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/, "", s); return s }
           function isq(c){ return (c=="\"" || c=="`" || c==sprintf("%c",39)) }
-          function strip_outer_quotes(s,   c1,cN){
+          function stripq(s,   c1,cN){
             while (length(s)>0) { c1=substr(s,1,1); cN=substr(s,length(s),1);
               if (isq(c1)) s=substr(s,2);
               else if (isq(cN)) s=substr(s,1,length(s)-1);
               else break }
             return s
           }
-          BEGIN { last_completed=0; cwd=""; cwd_line=0; last_file_line=0 }
-          /CWD path to be sent is/ { s=$0; sub(/.*CWD path to be sent is[ \t]+/, "", s);
-            cwd=strip_outer_quotes(trim(s)); cwd_line=NR; next }
-          /(^|[ \t])RETR[ \t]+/ { f=$0; sub(/.*RETR[ \t]+/, "", f); f=strip_outer_quotes(trim(f));
-            if (cwd_line && cwd_line<NR){ last_cwd=cwd; last_cwd_line=cwd_line; last_file=f; last_file_line=NR; last_completed=0 } ; next }
-          /(^|[^0-9])226([^0-9]|$)/ { if (last_file_line) last_completed=1; next }
-          /Transfer complete/       { if (last_file_line) last_completed=1; next }
-          END { if (last_file_line) print last_cwd_line, last_file_line, last_cwd, last_file, last_completed }
+          /CWD path to be sent is/ {
+            s=$0; sub(/.*CWD path to be sent is[ \t]+/, "", s);
+            cur=stripq(trim(s)); next
+          }
+          /(^|[ \t])RETR[ \t]+/ {
+            f=$0; sub(/.*RETR[ \t]+/, "", f); f=stripq(trim(f));
+            if (length(f) > 0) {  # push only if non-empty
+              pending_f[pcount]=f; pending_d[pcount]=cur; pcount++;
+            }
+            next
+          }
+          /(^|[^0-9])226([^0-9]|$)/ || /Transfer complete/ {
+            if (pcount>0) {
+              # complete most recent pending
+              print pending_d[pcount-1], pending_f[pcount-1];
+              delete pending_d[pcount-1]; delete pending_f[pcount-1]; pcount--;
+            }
+            next
+          }
         ' "$logfile_lftp"
       )
-
-      # Rien d exploitable
-      if [[ -z "$file_line" || -z "$folder" || -z "$file" ]]; then
-        printf "%s %s Téléchargement en cours ...   " "$CLR" "${spin:$i:1}" >&2
-        sleep 0.1; continue
-      fi
-
-      # Nettoyage quotes + normalisation des séparateurs "\" -> "/"
-      folder="${folder//\`/}"; folder="${folder//\"/}"; folder="${folder//\'/}"
-      file="${file//\`/}";     file="${file//\"/}";     file="${file//\'/}"
-      folder="$(printf '%s' "$folder" | sed -E 's#\\([[:alnum:]_.-])#/\1#g')"
-      file="$(printf '%s' "$file"     | sed -E 's#\\([[:alnum:]_.-])#/\1#g')"
-
-      # Nouveau fichier -> autoriser une nouvelle ligne "terminée"
-      if [[ "$file" != "$previous_file" ]]; then
-        previous_file="$file"
-        last_done_key=""
-      fi
-
-      # Affichage terminal compact
-      local print_file; print_file="$(shorten_path_term "$folder" "$file" 65)"
-
-      # Taille locale si dispo
-      local file_path="$LOCALDIR$folder/$file"
-      local file_size=""
-      if [[ -f "$file_path" ]]; then
-        file_size=$(numfmt --to=iec "$(stat -c%s "$file_path")")
-      fi
-      [[ -z "$file_size" ]] && file_size="~"
-
-      # Lignes stables pour le log
-      local base_token="Téléchargement de $folder/$file"
-      local log_line_now=" Téléchargement de $folder/$file $file_size"
-
-      # Fallback cohérence: si le log a déjà la ligne "terminée", force l’affichage terminal en terminé
-      if grep -qF "✔ Téléchargement terminé : $folder/$file" "$logfile_display" 2>/dev/null; then
-        done_flag="1"
-      fi
-
-      if [[ "$done_flag" == "1" ]]; then
-        # TERMINÉ: une seule fois par fichier
-        if [[ "$last_done_key" != "$folder/$file" ]]; then
-          last_done_key="$folder/$file"
-
-          # Terminal (stderr) : tick vert + espace
-          printf "%s%s✔%s  Téléchargement terminé : %s %s\n" \
-            "$CLR" "$GREEN" "$RESET" "$print_file" "$file_size" >&2
-
-          # display.log : remplacer "Téléchargement de ..." -> "✔ Téléchargement terminé ..."
-          replace_or_append_line "$logfile_display" \
-            "Téléchargement de $folder/$file" \
-            "✔ Téléchargement terminé : $folder/$file $file_size"
-
-          # pushover : ajouter SANS tick, une seule fois
-          if [[ ! -e "$logfile_pushover" ]]; then
-            echo -e "<b>Téléchargements terminés :</b>" > "$logfile_pushover"
-          fi
-          if ! grep -qxF "$folder/$file" "$logfile_pushover" 2>/dev/null; then
-            echo -e "$folder/$file" >> "$logfile_pushover"
-          fi
-        fi
-
-        # Spinner générique pendant l’attente d’un prochain RETR
-        printf "%s %s Téléchargement en cours ...   " "$CLR" "${spin:$i:1}" >&2
-
-      else
-        # EN COURS : terminal (stderr) uniquement
-        printf "%s %s Téléchargement de %s %s    " "$CLR" "${spin:$i:1}" "$print_file" "$file_size" >&2
-
-        # display.log : UNE ligne stable sans spinner (maj atomique)
-        replace_or_append_line "$logfile_display" \
-          "Téléchargement de $folder/$file" \
-          " Téléchargement de $folder/$file $file_size"
-        # (rien dans pushover pendant l’en cours)
-      fi
-
-      sleep 0.1
+      # 2) Spinner while waiting
+      printf "%s %s Téléchargement en cours ...   " "$CLR" "${spin:$i:1}" >&2
+      sleep 0.2
     else
-      sleep 0.1
+      sleep 0.2
     fi
   done
+  # --------- Drain final : rattrape tout RETR vu et pas encore traité ---------
+  if [[ -f "$logfile_lftp" ]]; then
+    while IFS=$'\t' read -r folder file; do
+      folder="${folder//\`/}"; folder="${folder//\"/}"; folder="${folder//\'/}"
+      file="${file//\`/}";     file="${file//\"/}";     file="${file//\'/}"
+      folder="${folder//\\//}"; file="${file//\\//}"
+      [[ -z "$folder" || -z "$file" ]] && continue
+      local remote_path="$folder/$file"
+      [[ -n "${__SEEN_COMPLETED[$remote_path]}" ]] && continue
+      local print_file; print_file="$(shorten_path_term "$folder" "$file" 65)"
+      local local_path="$LOCALDIR$remote_path"
+      local size_h="~"; [[ -f "$local_path" ]] && size_h=$(numfmt --to=iec "$(stat -c%s "$local_path")")
+      if verify_download "$local_path"; then
+        printf "%s✔  Téléchargement terminé : %s %s\n" "$CLR" "$print_file" "$size_h" >&2
+        __SEEN_COMPLETED["$remote_path"]=1
+        replace_or_append_line "$logfile_display" \
+          "Téléchargement de $remote_path" \
+          "✔ Téléchargement terminé : $remote_path $size_h"
+        # Pushover
+        if [[ -n "$logfile_pushover" ]]; then
+          [[ -e "$logfile_pushover" ]] || echo -e "<b>Téléchargements :</b>" > "$logfile_pushover"
+          grep -q "<b>Téléchargements :</b>" "$logfile_pushover" || echo -e "<b>Téléchargements :</b>" >> "$logfile_pushover"
+          echo -e "$remote_path ($size_h)" >> "$logfile_pushover"
+        fi
+      else
+        printf "%s✖  Téléchargement incomplet : %s\n" "$CLR" "$print_file" >&2
+        RETRY_LIST+=("$remote_path")
+        replace_or_append_line "$logfile_display" \
+          "Téléchargement de $remote_path" \
+          "✖ Téléchargement incomplet : $remote_path"
+      fi
+    done < <(
+      # ⬇️ On sort TOUS les RETR avec leur CWD courant, sans regarder les 226
+      awk -v OFS='\t' '
+        function trim(s){ sub(/^[ \t\r\n]+/,"",s); sub(/[ \t\r\n]+$/, "", s); return s }
+        function isq(c){ return (c=="\"" || c=="`" || c==sprintf("%c",39)) }
+        function stripq(s,   c1,cN){
+          while (length(s)>0) { c1=substr(s,1,1); cN=substr(s,length(s),1);
+            if (isq(c1)) s=substr(s,2);
+            else if (isq(cN)) s=substr(s,1,length(s)-1);
+            else break }
+          return s
+        }
+        /CWD path to be sent is/ {
+          s=$0; sub(/.*CWD path to be sent is[ \t]+/, "", s);
+          cur=stripq(trim(s)); next
+        }
+        /(^|[ \t])RETR[ \t]+/ {
+          f=$0; sub(/.*RETR[ \t]+/, "", f); f=stripq(trim(f));
+          if (length(f)>0 && length(cur)>0) print cur, f;
+          next
+        }
+      ' "$logfile_lftp"
+    )
+  fi
+  # --- Résumé final ---
+  if [[ -f "$logfile_lftp" && -f "$logfile_display" ]]; then
+    local total_expected ok_count retry_ok retry_fail final_ok
+    total_expected=$(awk '/(^|[ \t])RETR[ \t]+/ {c++} END{print c+0}' "$logfile_lftp")
+    if ! ok_count=$(grep -a -c '^✔ Téléchargement terminé' "$logfile_display" 2>/dev/null); then ok_count=0; fi
+    if ! retry_ok=$(grep -a -c '^  ✔ RETRY OK' "$logfile_display" 2>/dev/null); then retry_ok=0; fi
+    if ! retry_fail=$(grep -a -c '^  ✖ RETRY KO' "$logfile_display" 2>/dev/null); then retry_fail=0; fi
+    ok_count=${ok_count//$'\n'/}
+    retry_ok=${retry_ok//$'\n'/}
+    retry_fail=${retry_fail//$'\n'/}
+    final_ok=$(( ok_count + retry_ok ))
+    local plural=""
+    (( total_expected > 1 )) && plural="s"
+    {
+      echo    # <<< ajoute une ligne vide pour aérer
+      printf '   Résumé : %d/%d fichier%s OK (%d retry, %d échec)\n' "$final_ok" "$total_expected" "$plural" "$retry_ok" "$retry_fail"
+    } | tee -a "$logfile_display"
+  fi
   tput cnorm
 }
 
 
 ## Automatic file renaming function if existing
 rename_if_exists() {
-  file="$1"
-  if [[ ! -e "$file" ]]; then return 1; fi
-  dir=$(dirname "$file")
-  filename=$(basename "$file")
-  base="${filename%.*}"
-  ext="${filename##*.}"
-  if [[ "$base" == "$filename" ]]; then ext="";  fi
-  counter=1
-  newfile="$file"
-  while [[ -e "$newfile" ]]; do
-    if [[ -z "$ext" || "$filename" == "$ext" ]]; then
-      newfile="${dir}/${base}.${counter}"
-    else
-      newfile="${dir}/${base}.${counter}.${ext}"
-    fi
-    ((counter++))
+  local file="$1"
+  [[ -n "$file" && -e "$file" ]] || { echo "Fichier absent: $file" >&2; return 1; }
+  local dir stem base ext
+  dir=$(dirname -- "$file")
+  stem=$(basename -- "$file")
+  base="${stem%.*}"
+  ext="${stem##*.}"
+  [[ "$base" == "$stem" ]] && ext="" || ext=".$ext"
+  # Sauvegarder/restaurer l'état de nullglob pour éviter des effets de bord
+  local old_nullglob; old_nullglob=$(shopt -p nullglob); shopt -s nullglob
+  # Récupérer les suffixes numériques existants de la forme base.N.ext
+  local nums=() f n name name_no_ext
+  for f in "$dir/$base".[0-9]*"$ext"; do
+    name="$(basename -- "$f")"                  # ex: base.12.ext
+    name_no_ext="$name"
+    [[ -n "$ext" ]] && name_no_ext="${name%$ext}" # -> base.12
+    n="${name_no_ext##*.}"                      # -> 12
+    [[ "$n" =~ ^[0-9]+$ ]] && nums+=("$n")
   done
-  mv "$file" "$newfile"
+  if ((${#nums[@]})); then
+    IFS=$'\n' nums=($(printf '%s\n' "${nums[@]}" | sort -n)); IFS=$' \t\n'
+    for (( i=${#nums[@]}-1; i>=0; i-- )); do
+      n="${nums[i]}"
+      mv -- "$dir/$base.$n$ext" "$dir/$base.$((n+1))$ext"
+    done
+  fi
+  # Restaurer nullglob comme il était
+  eval "$old_nullglob"
+  # Le nom principal devient .1 (désormais libre)
+  mv -- "$file" "$dir/$base.1$ext"
 }
 rename_if_exists "$logfile_display"
 rename_if_exists "$logfile_lftp"
+touch "$logfile_display"
+touch "$logfile_lftp"
+chmod 600 "$logfile_display"
+chmod 600 "$logfile_lftp"
 
 
 eval 'printf "\e[46m  \e[0m \e[46m \e[1m %-64s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"' $logfile_display_cmd
@@ -630,6 +715,33 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
     if [[ -n "$WEBHOOK_URL" ]]; then discord-message "$pushover_message"; fi
     push-message "$pushover_message" "1"
   else
+    # --- Retry pass for incomplete files recorded by downloading_loading ---
+    if ((${#RETRY_LIST[@]} > 0)); then
+      # dédoublonne
+      mapfile -t __RETRY_UNIQ < <(printf '%s
+' "${RETRY_LIST[@]}" | awk 'NF' | sort -u)
+      eval 'echo -e "🔁 Relance de ${#__RETRY_UNIQ[@]} fichier(s) incomplet(s)..."' $logfile_display_cmd
+      for remote_path in "${__RETRY_UNIQ[@]}"; do
+        rel="${remote_path#$REMOTEDIR/}"
+        local_path="$LOCALDIR$REMOTEDIR/$rel"
+        dest_dir="$(dirname -- "$local_path")"
+        mkdir -p -- "$dest_dir"
+        lftp -u "$LOGIN","$PASSWORD" "$HOST" \
+          -e "pget -n 8 -c -O '$dest_dir' -- '$remote_path' ; bye" >> "$logfile_lftp" 2>&1
+        if verify_download "$local_path"; then
+          eval 'echo -e "  ✔ RETRY OK  '$remote_path' ($(numfmt --to=iec $(stat -c%s \"'$local_path'\" 2>/dev/null || echo 0)))"' $logfile_display_cmd
+          sed -i "s#✖ Téléchargement incomplet : $remote_path#✔ Téléchargement terminé : $remote_path $(numfmt --to=iec $(stat -c%s \"$local_path\" 2>/dev/null || echo 0))#g" "$logfile_display"
+          if [[ -n "$logfile_pushover" ]]; then
+            [[ -e "$logfile_pushover" ]] || echo -e "<b>Téléchargements :</b>" > "$logfile_pushover"
+            grep -q "<b>Téléchargements :</b>" "$logfile_pushover" || echo -e "<b>Téléchargements :</b>" >> "$logfile_pushover"
+            echo -e "$remote_path ($(numfmt --to=iec $(stat -c%s "$local_path" 2>/dev/null || echo 0)))" >> "$logfile_pushover"
+          fi
+        else
+          eval 'echo -e "  ✖ RETRY KO  '$remote_path'"' $logfile_display_cmd
+        fi
+      done
+    fi
+    # --- End retry pass ---
     eval 'echo ""' $logfile_display_cmd
     eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display_cmd
     if [[ "$DELETEUSELESSFILES" == "yes" ]]; then
