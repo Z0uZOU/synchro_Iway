@@ -33,6 +33,38 @@ ui_tag_warning="⚠️"
 ui_tag_section="\e[44m  \e[0m \e[44m \e[1m %-*s  \e[0m \e[44m  \e[0m \e[44m \e[0m \e[34m\u2759\e[0m\n"
 
 
+### Check dependencies
+check_dependencies() {
+  section_title="Contrôle des dépendances"
+  eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
+  for dependency in $dependencies ; do
+    if ! command -v $dependency >/dev/null 2>&1 ; then
+      eval 'echo -e "$ui_tag_warning Dépendance absente: $dependency"' $logfile_display_cmd
+      if command -v apt >/dev/null 2>&1; then
+        read -p "Voulez-vous installer $dependency ? [o/N] " yn
+        if [[ "$yn" =~ ^[oO]$ ]]; then
+          sudo apt update && sudo apt install -y "$dependency"
+        else
+          eval 'echo "$ui_tag_bad Installation annulée pour : $dependency"' $logfile_display_cmd
+          eval 'echo ""' $logfile_display_cmd
+          executed_date=$(date)
+          eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+          exit 1
+        fi
+      else
+        eval 'echo "$ui_tag_bad Veuillez installer manuellement $dependency (apt non disponible)"' $logfile_display_cmd
+        eval 'echo ""' $logfile_display_cmd
+        executed_date=$(date)
+        eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
+        exit 1
+      fi
+    else
+      eval 'echo -e "$ui_tag_ok Dépendance: $dependency"' $logfile_display_cmd
+    fi
+  done
+}
+
+
 ## Argument parser
 while getopts sceuhr:l:-: OPT; do
   if [ "$OPT" = "-" ]; then
@@ -80,6 +112,9 @@ while getopts sceuhr:l:-: OPT; do
               echo "Pas d'éditeur spécifié, utilisation par défaut (nano)"
               nano "$script_conf"
               source "$script_conf"
+              logfile_display_cmd=""
+              check_dependencies
+              echo ""
               section_title="Test de connexion au FTP"
               printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"
               lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls $REMOTEDIR; bye" >/dev/null 2>&1
@@ -99,6 +134,9 @@ while getopts sceuhr:l:-: OPT; do
                 echo "Édition du fichier avec: $next_arg"
                 $next_arg "$script_conf"
                 source "$script_conf"
+                logfile_display_cmd=""
+                check_dependencies
+                echo ""
                 section_title="Test de connexion au FTP"
                 printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"
                 lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls $REMOTEDIR; bye" >/dev/null 2>&1
@@ -595,34 +633,7 @@ fi
 eval 'echo ""' $logfile_display_cmd
 
 
-### Check dependencies
-section_title="Contrôle des dépendances"
-eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
-for dependency in $dependencies ; do
-  if ! command -v $dependency >/dev/null 2>&1 ; then
-    eval 'echo -e "$ui_tag_warning Dépendance absente: $dependency"' $logfile_display_cmd
-    if command -v apt >/dev/null 2>&1; then
-      read -p "Voulez-vous installer $dependency ? [o/N] " yn
-      if [[ "$yn" =~ ^[oO]$ ]]; then
-        sudo apt update && sudo apt install -y "$dependency"
-      else
-        eval 'echo "$ui_tag_bad Installation annulée pour : $dependency"' $logfile_display_cmd
-        eval 'echo ""' $logfile_display_cmd
-        executed_date=$(date)
-        eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
-        exit 1
-      fi
-    else
-      eval 'echo "$ui_tag_bad Veuillez installer manuellement $dependency (apt non disponible)"' $logfile_display_cmd
-      eval 'echo ""' $logfile_display_cmd
-      executed_date=$(date)
-      eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
-      exit 1
-    fi
-  else
-    eval 'echo -e "$ui_tag_ok Dépendance: $dependency"' $logfile_display_cmd
-  fi
-done
+check_dependencies
 
 
 ### Check update
