@@ -80,21 +80,33 @@ while getopts sceuhr:l:-: OPT; do
             echo -e "\033[1m$script_name_cap - Vérification de la configuration\033[0m"
             source "$script_conf"
             echo ""
+            logfile_display_cmd=""
+            check_dependencies
+            echo ""
+            section_title="Test de connexion au FTP"
+            printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"
             config_ok=true
             if [[ -z "$LOGIN" ]]; then echo "$ui_tag_bad LOGIN manquant"; config_ok=false; else echo "$ui_tag_ok LOGIN : $LOGIN"; fi
             if [[ -z "$PASSWORD" ]]; then echo "$ui_tag_bad PASSWORD manquant"; config_ok=false; else echo "$ui_tag_ok Mot de passe renseigné"; fi
             if [[ -z "$HOST" ]]; then echo "$ui_tag_bad HOST manquant"; config_ok=false; else echo "$ui_tag_ok Hôte FTP : $HOST"; fi
-            if [[ -z "$REMOTEDIR" ]]; then echo "$ui_tag_bad REMOTEDIR manquant"; config_ok=false; else echo "$ui_tag_ok Dossier distant : $REMOTEDIR"; fi
             if [[ -z "$LOCALDIR" ]]; then echo "$ui_tag_bad LOCALDIR manquant"; config_ok=false; else echo "$ui_tag_ok Dossier local : $LOCALDIR"; fi
+            if [[ -z "$REMOTEDIR" ]]; then echo "$ui_tag_bad REMOTEDIR manquant"; config_ok=false; else echo "$ui_tag_ok Dossier distant : $REMOTEDIR"; fi
             echo ""
             if [[ "$config_ok" == false ]]; then
-              echo -e "\033[1;31mLa configuration est incomplète\033[0m"
+              echo -e "\033[1;31m   La configuration est incomplète\033[0m"
               echo ""
               executed_date=$(date)
               printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               exit 1
             else
-              echo -e "\033[1;32mLa configuration est complète\033[0m"
+              echo -e "\033[1;32m   La configuration est complète\033[0m"
+              echo ""
+              lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls $REMOTEDIR; bye" >/dev/null 2>&1
+              if [[ $? -ne 0 ]]; then
+                echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"
+              else
+                echo -e "$ui_tag_ok Connexion OK"
+              fi
               echo ""
               executed_date=$(date)
               printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
@@ -295,6 +307,27 @@ discord-message() {
 }
 
 
+## Build excludes for lftp mirror (-x patterns)
+make_excludes() {
+  local excludes="$1"
+  local exclude_args=""
+  [[ -z "$excludes" ]] && { echo ""; return; }
+  IFS='|' read -ra parts <<< "$excludes"
+  for p in "${parts[@]}"; do
+    # trim surrounding spaces
+    p="${p#"${p%%[![:space:]]*}"}"
+    p="${p%"${p##*[![:space:]]}"}"
+    [[ -z "$p" ]] && continue
+    if [[ "$p" == *" "* ]]; then
+      exclude_args+=" -x '$p'"
+    else
+      exclude_args+=" -x $p"
+    fi
+  done
+  echo "$exclude_args"
+}
+
+
 ## Liste globale des fichiers incomplets (chemins distants)
 RETRY_LIST=()
 
@@ -302,7 +335,6 @@ RETRY_LIST=()
 ## Function to display download progress
 function downloading_loading() {
   local pid="$*"
-  # Set for completed files we already logged (associative array)
   declare -gA __SEEN_COMPLETED=()
   local spin='⣾⣽⣻⢿⡿⣟⣯⣷' i=0
   tput civis
@@ -385,7 +417,6 @@ function downloading_loading() {
         file="${file//\`/}";     file="${file//\"/}";     file="${file//\'/}"
         folder="${folder//\\//}"
         file="${file//\\//}"
-
         # >>> Guard: ignore incomplete entries that would generate "/"
         if [[ -z "$folder" || -z "$file" ]]; then
           continue
@@ -452,7 +483,6 @@ function downloading_loading() {
           }
         ' "$logfile_lftp"
       )
-      # 2) Spinner while waiting
       printf "%s %s Téléchargement en cours ...   " "$CLR" "${spin:$i:1}" >&2
       sleep 0.2
     else
@@ -528,7 +558,7 @@ function downloading_loading() {
     local plural=""
     (( total_expected > 1 )) && plural="s"
     {
-      echo    # <<< ajoute une ligne vide pour aérer
+      echo ""
       printf '   Résumé : %d/%d fichier%s OK (%d retry, %d échec)\n' "$final_ok" "$total_expected" "$plural" "$retry_ok" "$retry_fail"
     } | tee -a "$logfile_display"
   fi
@@ -539,7 +569,7 @@ function downloading_loading() {
 ## Automatic file renaming function if existing
 rename_if_exists() {
   local file="$1"
-  [[ -n "$file" && -e "$file" ]] || { echo "Fichier absent: $file" >&2; return 1; }
+  [[ -n "$file" && -e "$file" ]] || { return 1; }
   local dir stem base ext
   dir=$(dirname -- "$file")
   stem=$(basename -- "$file")
@@ -548,7 +578,6 @@ rename_if_exists() {
   [[ "$base" == "$stem" ]] && ext="" || ext=".$ext"
   # Sauvegarder/restaurer l'état de nullglob pour éviter des effets de bord
   local old_nullglob; old_nullglob=$(shopt -p nullglob); shopt -s nullglob
-  # Récupérer les suffixes numériques existants de la forme base.N.ext
   local nums=() f n name name_no_ext
   for f in "$dir/$base".[0-9]*"$ext"; do
     name="$(basename -- "$f")"                  # ex: base.12.ext
@@ -564,9 +593,7 @@ rename_if_exists() {
       mv -- "$dir/$base.$n$ext" "$dir/$base.$((n+1))$ext"
     done
   fi
-  # Restaurer nullglob comme il était
   eval "$old_nullglob"
-  # Le nom principal devient .1 (désormais libre)
   mv -- "$file" "$dir/$base.1$ext"
 }
 rename_if_exists "$logfile_display"
@@ -603,7 +630,7 @@ HOST="ged.interway.fr"
 LOGIN=""
 PASSWORD=""
 DELETEUSELESSFILES="yes"
-EXCLUDED="-x Thumbs.db -x 'Licence NP6'"
+EXCLUDED="Thumbs.db|Licence NP6"
  
 #### Paramètres Pushover
 ## ces réglages se trouvent sur le site http://www.pushover.net
@@ -703,6 +730,23 @@ else
   eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
   exit 1
 fi
+# Normalize exclusion patterns:
+# - If EXCLUDED already contains "-x", use as-is
+# - Else if it's a pipe-separated list "a|b c", convert to "-x a -x 'b c'"
+EXCLUDED_ARGS=""
+if [[ -n "$EXCLUDED" ]]; then
+  if [[ "$EXCLUDED" == *"-x"* ]]; then
+    EXCLUDED_ARGS="$EXCLUDED"
+  else
+    EXCLUDED_ARGS="$(make_excludes "$EXCLUDED")"
+  fi
+fi
+# Show what will be applied
+if [[ -n "$EXCLUDED_ARGS" ]]; then
+  eval 'echo "$ui_tag_ok Exclusions appliquées : '"'"'$EXCLUDED_ARGS'"'"'"' $logfile_display_cmd
+else
+  eval 'echo "$ui_tag_ok Aucune exclusion appliquée"' $logfile_display_cmd
+fi
 eval 'echo ""' $logfile_display_cmd
 
 
@@ -715,10 +759,10 @@ if [ -e "$LOCALDIR$REMOTEDIR" ]; then
   fi
   if [[ "$DELETEUSELESSFILES" == "yes" ]]; then
     eval 'echo -e "$ui_tag_ok Suppression des fichiers/dossiers inutiles activé"' $logfile_display_cmd
-    lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror --delete $EXCLUDED '$REMOTEDIR' '$LOCALDIR$REMOTEDIR' ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
+    lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror --delete $EXCLUDED_ARGS '$REMOTEDIR' '$LOCALDIR$REMOTEDIR' ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
   else
     eval 'echo -e "$ui_tag_warning Suppression des fichiers/dossiers inutiles désactivé"' $logfile_display_cmd
-    lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror $EXCLUDED '$REMOTEDIR' '$LOCALDIR$REMOTEDIR' ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
+    lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror $EXCLUDED_ARGS '$REMOTEDIR' '$LOCALDIR$REMOTEDIR' ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
   fi
   if [[ "$(cat $logfile_lftp | grep "Login failed")" != "" ]]; then
     eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display_cmd
