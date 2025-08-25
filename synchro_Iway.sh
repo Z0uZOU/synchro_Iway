@@ -19,17 +19,17 @@ dependencies="curl lftp"
 REMOTEDIR="/McDonalds"
 
 
-## Fix printf special char issue
+### Fix printf special char issue
 Lengh1="55"
 Lengh2="64"
 lon() ( echo $(( Lengh1 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 lon2() ( echo $(( Lengh2 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 
 
-## UI tags
+### UI tags
 ui_tag_ok="✅"
 ui_tag_bad="❌"
-ui_tag_warning="⚠️"
+ui_tag_warning="⚠"
 ui_tag_section="\e[44m  \e[0m \e[44m \e[1m %-*s  \e[0m \e[44m  \e[0m \e[44m \e[0m \e[34m\u2759\e[0m\n"
 
 
@@ -65,7 +65,21 @@ check_dependencies() {
 }
 
 
-## Argument parser
+### import configuration file
+import_source_conf () {
+  if [[ ! -f "$script_conf" ]]; then
+    eval 'echo -e "$ui_tag_warning Fichier de conf absent"' $logfile_display_cmd
+  else
+    source "$script_conf"
+    if [[ "$ui_tag_ok" == "" ]]; then ui_tag_ok="✅"; fi
+    if [[ "$ui_tag_bad" == "" ]]; then ui_tag_bad="❌"; fi
+    if [[ "$ui_tag_warning" == "" ]]; then ui_tag_warning="⚠"; fi
+    eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_display_cmd
+  fi
+}
+
+
+### Argument parser
 while getopts sceuhr:l:-: OPT; do
   if [ "$OPT" = "-" ]; then
     OPT="${OPTARG%%=*}"
@@ -78,9 +92,9 @@ while getopts sceuhr:l:-: OPT; do
             executed_date=$(date)
             printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             echo -e "\033[1m$script_name_cap - Vérification de la configuration\033[0m"
-            source "$script_conf"
-            echo ""
             logfile_display_cmd=""
+			import_source_conf
+            echo ""
             check_dependencies
             echo ""
             section_title="Test de connexion au FTP"
@@ -93,13 +107,13 @@ while getopts sceuhr:l:-: OPT; do
             if [[ -z "$REMOTEDIR" ]]; then echo "$ui_tag_bad REMOTEDIR manquant"; config_ok=false; else echo "$ui_tag_ok Dossier distant : $REMOTEDIR"; fi
             echo ""
             if [[ "$config_ok" == false ]]; then
-              echo -e "\033[1;31m   La configuration est incomplète\033[0m"
+              echo -e "$ui_tag_bad\033[1;31m La configuration est incomplète\033[0m"
               echo ""
               executed_date=$(date)
               printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
               exit 1
             else
-              echo -e "\033[1;32m   La configuration est complète\033[0m"
+              echo -e "$ui_tag_ok\033[1;32m La configuration est complète\033[0m"
               echo ""
               lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls $REMOTEDIR; bye" >/dev/null 2>&1
               if [[ $? -ne 0 ]]; then
@@ -123,8 +137,9 @@ while getopts sceuhr:l:-: OPT; do
               echo ""
               echo "Pas d'éditeur spécifié, utilisation par défaut (nano)"
               nano "$script_conf"
-              source "$script_conf"
               logfile_display_cmd=""
+              import_source_conf
+              echo ""
               check_dependencies
               echo ""
               section_title="Test de connexion au FTP"
@@ -145,8 +160,8 @@ while getopts sceuhr:l:-: OPT; do
               if command -v $next_arg ; then
                 echo "Édition du fichier avec: $next_arg"
                 $next_arg "$script_conf"
-                source "$script_conf"
                 logfile_display_cmd=""
+                import_source_conf
                 check_dependencies
                 echo ""
                 section_title="Test de connexion au FTP"
@@ -269,12 +284,12 @@ done
 shift $((OPTIND-1)) # remove parsed options and args from $@ list
 
 
-## Check if this script is running
+### Check if this script is running
 exec 200>/tmp/${script_name}.lock
 flock -n 200 || { echo "Script déjà en cours d'exécution"; exit 1; }
 
 
-## Message feature
+### Message feature
 push-message() {
   push_content=$1
   push_priority=$2
@@ -307,7 +322,7 @@ discord-message() {
 }
 
 
-## Build excludes for lftp mirror (-x patterns)
+### Build excludes for lftp mirror (-x patterns)
 make_excludes() {
   local excludes="$1"
   local exclude_args=""
@@ -642,6 +657,11 @@ target_2=""
 ## Webhook URL pour la prise en charge de Discord
 WEBHOOK_URL=""
  
+#### UI tags pour customisation
+ui_tag_ok=""
+ui_tag_bad=""
+ui_tag_warning="️"
+ 
 ####################################
 ## Fin de configuration
 ####################################
@@ -654,8 +674,19 @@ EOT
   eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
   exit 1
 else
-  eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_display_cmd
-  source "$script_conf"
+  import_source_conf
+fi
+is_wsl() {
+  if grep -qi microsoft /proc/version 2>/dev/null; then
+    return 0
+  else
+    return 1
+  fi
+}
+if is_wsl; then
+  eval 'echo -e "$ui_tag_ok Script lancé sous WSL"' $logfile_display_cmd
+else
+  eval 'echo -e "$ui_tag_ok Script lancé sous Linux natif"' $logfile_display_cmd
 fi
 eval 'echo ""' $logfile_display_cmd
 
@@ -669,7 +700,7 @@ if curl -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; the
   md5_local=`md5sum "$this_script" | cut -f1 -d" " 2>/dev/null`
   md5_remote=`curl -s "$script_remote" | md5sum | cut -f1 -d" "`
   if [[ "$md5_local" != "$md5_remote" ]]; then
-    eval 'echo -e "$ui_tag_warning Une nouvelle version du script est disponible..."' $logfile_display_cmd
+    eval 'echo -e "$ui_tag_warning  Une nouvelle version du script est disponible..."' $logfile_display_cmd
   else
     eval 'echo -e "$ui_tag_ok Le script est à jour..."' $logfile_display_cmd
   fi
