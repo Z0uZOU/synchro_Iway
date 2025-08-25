@@ -29,7 +29,7 @@ lon2() ( echo $(( Lengh2 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 ### UI tags
 ui_tag_ok="✅"
 ui_tag_bad="❌"
-ui_tag_warning="⚠"
+ui_tag_warning="⚠️"
 ui_tag_section="\e[44m  \e[0m \e[44m \e[1m %-*s  \e[0m \e[44m  \e[0m \e[44m \e[0m \e[34m\u2759\e[0m\n"
 
 
@@ -71,13 +71,9 @@ import_source_conf () {
     eval 'echo -e "$ui_tag_warning Fichier de conf absent"' $logfile_display_cmd
   else
     source "$script_conf"
-    if [[ "$ui_tag_ok" == "" ]]; then ui_tag_ok="✅"; fi
-    if [[ "$ui_tag_bad" == "" ]]; then ui_tag_bad="❌"; fi
-    if [[ "$ui_tag_warning" == "" ]]; then ui_tag_warning="⚠"; fi
-    eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_display_cmd
+	eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_display_cmd
   fi
 }
-
 
 ### Argument parser
 while getopts sceuhr:l:-: OPT; do
@@ -658,9 +654,9 @@ target_2=""
 WEBHOOK_URL=""
  
 #### UI tags pour customisation
-ui_tag_ok=""
-ui_tag_bad=""
-ui_tag_warning="️"
+#ui_tag_ok="✅"
+#ui_tag_bad="❌"
+#ui_tag_warning="⚠️"
  
 ####################################
 ## Fin de configuration
@@ -700,7 +696,7 @@ if curl -m 2 --head --silent --fail "$script_remote" 2>/dev/null >/dev/null; the
   md5_local=`md5sum "$this_script" | cut -f1 -d" " 2>/dev/null`
   md5_remote=`curl -s "$script_remote" | md5sum | cut -f1 -d" "`
   if [[ "$md5_local" != "$md5_remote" ]]; then
-    eval 'echo -e "$ui_tag_warning  Une nouvelle version du script est disponible..."' $logfile_display_cmd
+    eval 'echo -e "$ui_tag_warning Une nouvelle version du script est disponible..."' $logfile_display_cmd
   else
     eval 'echo -e "$ui_tag_ok Le script est à jour..."' $logfile_display_cmd
   fi
