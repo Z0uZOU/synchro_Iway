@@ -567,6 +567,11 @@ function downloading_loading() {
         printf "%s✔  Téléchargement terminé : %s %s\n" "$CLR" "$print_file" "$size_h" >&2
         __SEEN_COMPLETED["$remote_path"]=1
         replace_or_append_line "$logfile_display" "Téléchargement de $remote_path" "✔ Téléchargement terminé : $remote_path $size_h"
+        if [[ -n "$logfile_pushover" ]]; then
+          [[ -e "$logfile_pushover" ]] || echo -e "<b>Téléchargements :</b>" > "$logfile_pushover"
+          grep -q "<b>Téléchargements :</b>" "$logfile_pushover" || echo -e "<b>Téléchargements :</b>" >> "$logfile_pushover"
+          echo -e "$remote_path ($size_h)" >> "$logfile_pushover"
+        fi
       else
         printf "%s✖  Téléchargement incomplet : %s\n" "$CLR" "$print_file" >&2
         RETRY_LIST+=("$remote_path")
