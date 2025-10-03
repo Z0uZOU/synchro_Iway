@@ -16,8 +16,7 @@ logfile_lftp="$script_folder/logs/${date_log}_lftp.log"
 logfile_display="$script_folder/logs/${date_log}_display.log"
 logfile_display_cmd="| tee -a $logfile_display"
 dependencies="curl lftp"
-REMOTEDIR="/McDonalds"
-
+REMOTEDIR="/MASTERS|/McDonalds"
 
 ## Fix printf special char issue
 Lengh1="55"
@@ -25,13 +24,11 @@ Lengh2="64"
 lon() ( echo $(( Lengh1 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 lon2() ( echo $(( Lengh2 + $(wc -c <<<"$1") - $(wc -m <<<"$1") )) )
 
-
 ## UI tags
 ui_tag_ok="✅"
 ui_tag_bad="❌"
 ui_tag_warning="⚠️"
 ui_tag_section="\e[44m  \e[0m \e[44m \e[1m %-*s  \e[0m \e[44m  \e[0m \e[44m \e[0m \e[34m\u2759\e[0m\n"
-
 
 ## Check dependencies
 check_dependencies() {
@@ -64,14 +61,13 @@ check_dependencies() {
   done
 }
 
-
 ## import configuration file
 import_source_conf () {
   if [[ ! -f "$script_conf" ]]; then
     eval 'echo -e "$ui_tag_warning Fichier de conf absent"' $logfile_display_cmd
   else
     source "$script_conf"
-	eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_display_cmd
+    eval 'echo -e "$ui_tag_ok Fichier de configuration présent"' $logfile_display_cmd
   fi
 }
 
@@ -89,7 +85,7 @@ while getopts sceuhr:l:-: OPT; do
             printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             echo -e "\033[1m$script_name_cap - Vérification de la configuration\033[0m"
             logfile_display_cmd=""
-			import_source_conf
+            import_source_conf
             echo ""
             check_dependencies
             echo ""
@@ -100,7 +96,7 @@ while getopts sceuhr:l:-: OPT; do
             if [[ -z "$PASSWORD" ]]; then echo "$ui_tag_bad PASSWORD manquant"; config_ok=false; else echo "$ui_tag_ok Mot de passe renseigné"; fi
             if [[ -z "$HOST" ]]; then echo "$ui_tag_bad HOST manquant"; config_ok=false; else echo "$ui_tag_ok Hôte FTP : $HOST"; fi
             if [[ -z "$LOCALDIR" ]]; then echo "$ui_tag_bad LOCALDIR manquant"; config_ok=false; else echo "$ui_tag_ok Dossier local : $LOCALDIR"; fi
-            if [[ -z "$REMOTEDIR" ]]; then echo "$ui_tag_bad REMOTEDIR manquant"; config_ok=false; else echo "$ui_tag_ok Dossier distant : $REMOTEDIR"; fi
+            if [[ -z "$REMOTEDIR" ]]; then echo "$ui_tag_bad REMOTEDIR manquant"; config_ok=false; else echo "$ui_tag_ok Dossier(s) distant(s) : $REMOTEDIR"; fi
             echo ""
             if [[ "$config_ok" == false ]]; then
               echo -e "$ui_tag_bad\033[1;31m La configuration est incomplète\033[0m"
@@ -111,16 +107,23 @@ while getopts sceuhr:l:-: OPT; do
             else
               echo -e "$ui_tag_ok\033[1;32m La configuration est complète\033[0m"
               echo ""
-              lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls $REMOTEDIR; bye" >/dev/null 2>&1
-              if [[ $? -ne 0 ]]; then
-                echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"
-              else
-                echo -e "$ui_tag_ok Connexion OK"
-              fi
+              # Teste la connexion + un ls pour chaque répertoire déclaré
+              IFS='|' read -ra __RD_LIST <<< "$REMOTEDIR"
+              conn_ok=true
+              for rd in "${__RD_LIST[@]}"; do
+                rd="${rd#"${rd%%[![:space:]]*}"}"; rd="${rd%"${rd##*[![:space:]]}"}"
+                [[ -z "$rd" ]] && continue
+                if ! lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls '$rd'; bye" >/dev/null 2>&1; then
+                  echo -e "$ui_tag_bad Connexion/accès KO pour : $rd"
+                  conn_ok=false
+                else
+                  echo -e "$ui_tag_ok Accès OK : $rd"
+                fi
+              done
               echo ""
               executed_date=$(date)
               printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
-              exit 0
+              $conn_ok && exit 0 || exit 1
             fi
             ;;
     e | edit-config )
@@ -140,12 +143,16 @@ while getopts sceuhr:l:-: OPT; do
               echo ""
               section_title="Test de connexion au FTP"
               printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"
-              lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls $REMOTEDIR; bye" >/dev/null 2>&1
-              if [[ $? -ne 0 ]]; then
-                echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"
-              else
-                echo -e "$ui_tag_ok Connexion OK"
-              fi
+              IFS='|' read -ra __RD_LIST <<< "$REMOTEDIR"
+              for rd in "${__RD_LIST[@]}"; do
+                rd="${rd#"${rd%%[![:space:]]*}"}"; rd="${rd%"${rd##*[![:space:]]}"}"
+                [[ -z "$rd" ]] && continue
+                if ! lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls '$rd'; bye" >/dev/null 2>&1; then
+                  echo -e "$ui_tag_bad Connexion/accès KO pour : $rd"
+                else
+                  echo -e "$ui_tag_ok Accès OK : $rd"
+                fi
+              done
               echo ""
               executed_date=$(date)
               printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
@@ -162,12 +169,16 @@ while getopts sceuhr:l:-: OPT; do
                 echo ""
                 section_title="Test de connexion au FTP"
                 printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"
-                lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls $REMOTEDIR; bye" >/dev/null 2>&1
-                if [[ $? -ne 0 ]]; then
-                  echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"
-                else
-                  echo -e "$ui_tag_ok Connexion OK"
-                fi
+                IFS='|' read -ra __RD_LIST <<< "$REMOTEDIR"
+                for rd in "${__RD_LIST[@]}"; do
+                  rd="${rd#"${rd%%[![:space:]]*}"}"; rd="${rd%"${rd##*[![:space:]]}"}"
+                  [[ -z "$rd" ]] && continue
+                  if ! lftp -u "$LOGIN","$PASSWORD" "$HOST" -e "ls '$rd'; bye" >/dev/null 2>&1; then
+                    echo -e "$ui_tag_bad Connexion/accès KO pour : $rd"
+                  else
+                    echo -e "$ui_tag_ok Accès OK : $rd"
+                  fi
+                done
               else
                 echo "Il n'existe aucun logiciel appelé \"$next_arg\" installé"
               fi
@@ -192,7 +203,7 @@ while getopts sceuhr:l:-: OPT; do
             echo " -c or --check-config                      : vérification du fichier de configuration"
             echo " -e [value*] or --edit-config=[value*]     : édition du fichier de configuration (défaut: nano)"
             echo " -l [value] or --local=[value]             : dossier local"
-            echo " -r [value] or --remote=[value]            : dossier distant"
+            echo " -r [value] or --remote=[value]            : dossier distant (accepte '|' pour plusieurs)"
             echo " -s or --stop                              : force l'arrêt du script"
             echo " -u or --update                            : mise à jour du script"
             echo ""
@@ -215,6 +226,7 @@ while getopts sceuhr:l:-: OPT; do
             fi
             ;;
     s | stop )
+            tput cnorm
             if pgrep -x lftp >/dev/null 2>&1; then
               echo "Arrêt du script"
               mapfile -t pids < <(pgrep -f "(${script_name}|lftp)" 2>/dev/null || true)
@@ -273,17 +285,15 @@ while getopts sceuhr:l:-: OPT; do
             printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"
             exit 0
             ;;
-    ??* )          die "Option illégale --$OPT" ;;  # bad long option
-    ? )            exit 2 ;;  # bad short option (error reported via getopts)
+    ??* )          die "Option illégale --$OPT" ;;
+    ? )            exit 2 ;;
   esac
 done
-shift $((OPTIND-1)) # remove parsed options and args from $@ list
-
+shift $((OPTIND-1))
 
 ## Check if this script is running
 exec 200>/tmp/${script_name}.lock
 flock -n 200 || { echo "Script déjà en cours d'exécution"; exit 1; }
-
 
 ## Message feature
 push-message() {
@@ -317,7 +327,6 @@ discord-message() {
     "$WEBHOOK_URL" > /dev/null
 }
 
-
 ## Build excludes for lftp mirror (-x patterns)
 make_excludes() {
   local excludes="$1"
@@ -338,10 +347,8 @@ make_excludes() {
   echo "$exclude_args"
 }
 
-
 ## Liste globale des fichiers incomplets (chemins distants)
 RETRY_LIST=()
-
 
 ## Function to display download progress
 function downloading_loading() {
@@ -376,7 +383,6 @@ function downloading_loading() {
   # Ajoute une ligne "token" uniquement si elle n'est pas déjà présente (anti-flood).
   append_if_absent() {
     local file="$1" token="$2"
-    # On cherche le token littéral (sans emoji). S’il existe déjà, on n’ajoute pas.
     if [[ -f "$file" ]] && grep -a -Fq -- "$token" "$file"; then
       return 0
     fi
@@ -534,7 +540,7 @@ function downloading_loading() {
         local cur_print; cur_print="$(shorten_path_term "$cur_folder" "$cur_file" 65)"
         local remote_path="$cur_folder/$cur_file"
 
-        # Terminal : on garde le spinner + nom (raccourci)
+        # Terminal : spinner + nom (raccourci)
         printf "%s %s Téléchargement de %s   " "$CLR" "${spin:$i:1}" "$cur_print" >&2
 
         # Logfile : pas d’emoji, et on n’écrit qu’une fois par fichier
@@ -621,7 +627,6 @@ function downloading_loading() {
   tput cnorm
 }
 
-
 ## Automatic file renaming function if existing
 rename_if_exists() {
   local file="$1"
@@ -632,14 +637,13 @@ rename_if_exists() {
   base="${stem%.*}"
   ext="${stem##*.}"
   [[ "$base" == "$stem" ]] && ext="" || ext=".$ext"
-  # Sauvegarder/restaurer l'état de nullglob pour éviter des effets de bord
   local old_nullglob; old_nullglob=$(shopt -p nullglob); shopt -s nullglob
   local nums=() f n name name_no_ext
   for f in "$dir/$base".[0-9]*"$ext"; do
-    name="$(basename -- "$f")"                  # ex: base.12.ext
+    name="$(basename -- "$f")"
     name_no_ext="$name"
-    [[ -n "$ext" ]] && name_no_ext="${name%$ext}" # -> base.12
-    n="${name_no_ext##*.}"                      # -> 12
+    [[ -n "$ext" ]] && name_no_ext="${name%$ext}"
+    n="${name_no_ext##*.}"
     [[ "$n" =~ ^[0-9]+$ ]] && nums+=("$n")
   done
   if ((${#nums[@]})); then
@@ -659,11 +663,9 @@ touch "$logfile_lftp"
 chmod 600 "$logfile_display"
 chmod 600 "$logfile_lftp"
 
-
 eval 'printf "\e[46m  \e[0m \e[46m \e[1m %-64s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" "$script_name_cap"' $logfile_display_cmd
 executed_date=$(date)
 eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
-
 
 ## Configuration file
 if [[ ! -f "$script_conf" ]]; then
@@ -676,7 +678,7 @@ cat <<EOT >> "$script_conf"
 ####################################
  
 #### Paramètres
-## Dossier distant
+## Dossier distant (accepte plusieurs via "|")
 REMOTEDIR="$REMOTEDIR"
 ## Dossier local
 LOCALDIR="$LOCALDIR"
@@ -717,6 +719,17 @@ EOT
 else
   import_source_conf
 fi
+
+# --- Normalisation REMOTEDIR en liste ---
+REMOTEDIR_LIST=()
+if [[ -n "$REMOTEDIR" ]]; then
+  IFS='|' read -ra REMOTEDIR_LIST <<< "$REMOTEDIR"
+  for i in "${!REMOTEDIR_LIST[@]}"; do
+    REMOTEDIR_LIST[$i]="${REMOTEDIR_LIST[$i]#"${REMOTEDIR_LIST[$i]%%[![:space:]]*}"}"
+    REMOTEDIR_LIST[$i]="${REMOTEDIR_LIST[$i]%"${REMOTEDIR_LIST[$i]##*[![:space:]]}"}"
+  done
+fi
+
 is_wsl() {
   if grep -qi microsoft /proc/version 2>/dev/null; then
     return 0
@@ -731,9 +744,7 @@ else
 fi
 eval 'echo ""' $logfile_display_cmd
 
-
 check_dependencies
-
 
 ## Check update
 this_script=$(realpath -s "$0")
@@ -751,8 +762,7 @@ else
 fi
 eval 'echo ""' $logfile_display_cmd
 
-
-## Creation of folders
+## Creation of folders + variables
 section_title="Variables"
 eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
 if [[ "$LOCALDIR" == "" ]]; then
@@ -766,9 +776,9 @@ if [[ "$LOCALDIR" == "" ]]; then
   exit 1
 else
   eval 'echo -e "$ui_tag_ok Répertoire local: $LOCALDIR"' $logfile_display_cmd
-  if [[ "$REMOTEDIR" == "" ]]; then
+  if [[ "${#REMOTEDIR_LIST[@]}" -eq 0 ]]; then
     eval 'echo -e "$ui_tag_bad Veuillez spécifier un répertoire distant\n"' $logfile_display_cmd
-    eval 'echo -e "   UTILISATION: ./"$script_name_full" -r remote_dir"' $logfile_display_cmd
+    eval 'echo -e "   UTILISATION: ./"$script_name_full" -r remote_dir (ou '\"dir1|dir2|dir 3\"')"' $logfile_display_cmd
     eval 'echo -e "             ou ./"$script_name_full" -e"' $logfile_display_cmd
     eval 'echo -e "   ou editez le fichier \"$script_conf\" avant de poursuivre"' $logfile_display_cmd
     eval 'echo ""' $logfile_display_cmd
@@ -776,9 +786,12 @@ else
     eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
     exit 1
   fi
-  eval 'echo -e "$ui_tag_ok Répertoire distant: $REMOTEDIR"' $logfile_display_cmd
-  mkdir -p "$LOCALDIR/$REMOTEDIR" 2>/dev/null
+  for rd in "${REMOTEDIR_LIST[@]}"; do
+    [[ -z "$rd" ]] && continue
+    eval 'echo -e "$ui_tag_ok Répertoire distant: '"$rd"'"' $logfile_display_cmd
+  done
 fi
+
 if [[ "$LOGIN" != "" ]] && [[ "$PASSWORD" != "" ]]; then
   eval 'echo -e "$ui_tag_ok Utilisateur: $LOGIN"' $logfile_display_cmd
   eval 'echo -e "$ui_tag_ok Mot de passe renseigné"' $logfile_display_cmd
@@ -802,9 +815,8 @@ else
   eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
   exit 1
 fi
-# Normalize exclusion patterns:
-# - If EXCLUDED already contains "-x", use as-is
-# - Else if it's a pipe-separated list "a|b c", convert to "-x a -x 'b c'"
+
+# Normalize exclusion patterns
 EXCLUDED_ARGS=""
 if [[ -n "$EXCLUDED" ]]; then
   if [[ "$EXCLUDED" == *"-x"* ]]; then
@@ -813,7 +825,6 @@ if [[ -n "$EXCLUDED" ]]; then
     EXCLUDED_ARGS="$(make_excludes "$EXCLUDED")"
   fi
 fi
-# Show what will be applied
 if [[ -n "$EXCLUDED_ARGS" ]]; then
   eval 'echo "$ui_tag_ok Exclusions appliquées : '"'"'$EXCLUDED_ARGS'"'"'"' $logfile_display_cmd
 else
@@ -821,83 +832,121 @@ else
 fi
 eval 'echo ""' $logfile_display_cmd
 
-
 ## Synchro launched
 section_title="Synchronisation"
 eval 'printf "$ui_tag_section" $(lon2 "$section_title") "$section_title"' $logfile_display_cmd
-if [ -e "$LOCALDIR$REMOTEDIR" ]; then
-  if [[ -e "$logfile_pushover" ]]; then
-    rm "$logfile_pushover"
-  fi
+
+processed_any=false
+
+for remote_dir in "${REMOTEDIR_LIST[@]}"; do
+  [[ -z "$remote_dir" ]] && continue
+  processed_any=true
+
+  # -- Prépare un log Pushover spécifique à ce répertoire
+  _old_logfile_pushover="$logfile_pushover"
+  logfile_pushover="$script_folder/logs/pushover.$(echo "$remote_dir" | sed 's|[ /]|_|g').log"
+  rm -f "$logfile_pushover" 2>/dev/null
+
+  # Création du dossier local cible
+  mkdir -p "$LOCALDIR$remote_dir" 2>/dev/null
+
+  # Lancement du mirror pour ce répertoire
   if [[ "$DELETEUSELESSFILES" == "yes" ]]; then
-    eval 'echo -e "$ui_tag_ok Suppression des fichiers/dossiers inutiles activé"' $logfile_display_cmd
-    lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror --delete $EXCLUDED_ARGS '$REMOTEDIR' '$LOCALDIR$REMOTEDIR' ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
+    eval 'echo -e "$ui_tag_ok Suppression des fichiers/dossiers inutiles activé" '$logfile_display_cmd
+    eval 'echo -e " → Répertoire distant: $remote_dir"' $logfile_display_cmd
+    lftp -u "$LOGIN","$PASSWORD" "$HOST" -d \
+      -e "mirror --delete $EXCLUDED_ARGS '$remote_dir' '$LOCALDIR$remote_dir' ; quit" \
+      > "$logfile_lftp" 2>&1 & downloading_loading $!
   else
-    eval 'echo -e "$ui_tag_warning Suppression des fichiers/dossiers inutiles désactivé"' $logfile_display_cmd
-    lftp -u $LOGIN,$PASSWORD $HOST -d -e "mirror $EXCLUDED_ARGS '$REMOTEDIR' '$LOCALDIR$REMOTEDIR' ; quit" > $logfile_lftp 2>&1 & downloading_loading $!
+    eval 'echo -e "$ui_tag_warning Suppression des fichiers/dossiers inutiles désactivé" '$logfile_display_cmd
+    eval 'echo -e " → Répertoire distant: $remote_dir"' $logfile_display_cmd
+    lftp -u "$LOGIN","$PASSWORD" "$HOST" -d \
+      -e "mirror $EXCLUDED_ARGS '$remote_dir' '$LOCALDIR$remote_dir' ; quit" \
+      > "$logfile_lftp" 2>&1 & downloading_loading $!
   fi
-  if [[ "$(cat $logfile_lftp | grep "Login failed")" != "" ]]; then
-    eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s)"' $logfile_display_cmd
-    pushover_message=`echo -e "[ <b>SYNCHRONISATION ÉCHOUÉE</b> ]\n💻 $(hostname)\nLOGIN et/ou PASSWORD incorect(s)"`
-    if [[ -n "$WEBHOOK_URL" ]]; then discord-message "$pushover_message"; fi
+
+  # Erreur d’auth ?
+  if grep -q "Login failed" "$logfile_lftp" 2>/dev/null; then
+    eval 'echo -e "$ui_tag_bad Connexion echouée: LOGIN et/ou PASSWORD incorect(s) (dir: '"$remote_dir"')" '$logfile_display_cmd
+    pushover_message=$(echo -e "[ <b>SYNCHRO ÉCHOUÉE</b> ]\n💻 $(hostname)\n<b>Répertoire:</b> $remote_dir\nLOGIN et/ou PASSWORD incorect(s)")
+    [[ -n "$WEBHOOK_URL" ]] && discord-message "$pushover_message"
     push-message "$pushover_message" "1"
-  else
-    # --- Retry pass for incomplete files recorded by downloading_loading ---
-    if ((${#RETRY_LIST[@]} > 0)); then
-      # dédoublonne
-      mapfile -t __RETRY_UNIQ < <(printf '%s
-' "${RETRY_LIST[@]}" | awk 'NF' | sort -u)
-      eval 'echo -e "🔁 Relance de ${#__RETRY_UNIQ[@]} fichier(s) incomplet(s)..."' $logfile_display_cmd
-      for remote_path in "${__RETRY_UNIQ[@]}"; do
-        rel="${remote_path#$REMOTEDIR/}"
-        local_path="$LOCALDIR$REMOTEDIR/$rel"
-        dest_dir="$(dirname -- "$local_path")"
-        mkdir -p -- "$dest_dir"
-        lftp -u "$LOGIN","$PASSWORD" "$HOST" \
-          -e "pget -n 8 -c -O '$dest_dir' -- '$remote_path' ; bye" >> "$logfile_lftp" 2>&1
-        if verify_download "$local_path"; then
-          eval 'echo -e "  ✔ RETRY OK  '$remote_path' ($(numfmt --to=iec $(stat -c%s \"'$local_path'\" 2>/dev/null || echo 0)))"' $logfile_display_cmd
-          sed -i "s#✖ Téléchargement incomplet : $remote_path#✔ Téléchargement terminé : $remote_path $(numfmt --to=iec $(stat -c%s \"$local_path\" 2>/dev/null || echo 0))#g" "$logfile_display"
-          if [[ -n "$logfile_pushover" ]]; then
-            [[ -e "$logfile_pushover" ]] || echo -e "<b>Téléchargements :</b>" > "$logfile_pushover"
-            grep -q "<b>Téléchargements :</b>" "$logfile_pushover" || echo -e "<b>Téléchargements :</b>" >> "$logfile_pushover"
-            echo -e "$remote_path ($(numfmt --to=iec $(stat -c%s "$local_path" 2>/dev/null || echo 0)))" >> "$logfile_pushover"
-          fi
-        else
-          eval 'echo -e "  ✖ RETRY KO  '$remote_path'"' $logfile_display_cmd
-        fi
-      done
-    fi
-    # --- End retry pass ---
-    eval 'echo ""' $logfile_display_cmd
-    eval 'echo -e "$ui_tag_ok Synchronisation terminée"' $logfile_display_cmd
-    if [[ "$DELETEUSELESSFILES" == "yes" ]]; then
-      log_cleaning=`grep '^---- remove(' "$logfile_lftp" | sed -E 's/^---- remove\((.*)\)/\1/' | sed "s|^$LOCALDIR||"`
-      if [[ "$log_cleaning" != "" ]]; then
-        eval 'echo -e "$ui_tag_ok Suppression des fichiers/dossiers absents du FTP"' $logfile_display_cmd
-        if [[ ! -e "$logfile_pushover" ]]; then
-          echo -e "<b>Supression de :</b>" > $logfile_pushover
-        else
-          echo -e "<b>Supression de :</b>" >> $logfile_pushover
-        fi
-        while IFS= read -r line; do
-          eval 'echo -e "..... $line"' $logfile_display_cmd
-          echo -e $line >> $logfile_pushover
-        done <<< "$log_cleaning"
-      fi
-    fi
-    if [[ ! -e "$logfile_pushover" ]]; then
-      pushover_message=`echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\n💻 $(hostname)\nDisque dur à jour"`
-    else
-      pushover_message=`echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\n💻 $(hostname)\n$(cat $logfile_pushover)"`
-    fi
-    if [[ -n "$WEBHOOK_URL" ]]; then discord-message "$pushover_message"; fi
-    push-message "$pushover_message"
+    # Restaure le pointeur de log Pushover global et passe au suivant
+    logfile_pushover="$_old_logfile_pushover"
+    continue
   fi
-  chmod 777 -R $LOCALDIR$REMOTEDIR 2>/dev/null
+
+  # --- Retry pass pour les fichiers incomplets de ce répertoire ---
+  if ((${#RETRY_LIST[@]} > 0)); then
+    mapfile -t __RETRY_UNIQ < <(printf '%s\n' "${RETRY_LIST[@]}" | awk 'NF' | sort -u)
+    eval 'echo -e "🔁 Relance de ${#__RETRY_UNIQ[@]} fichier(s) incomplet(s)..."' $logfile_display_cmd
+    for remote_path in "${__RETRY_UNIQ[@]}"; do
+      local_path="$LOCALDIR$remote_path"
+      dest_dir="$(dirname -- "$local_path")"
+      mkdir -p -- "$dest_dir"
+      lftp -u "$LOGIN","$PASSWORD" "$HOST" \
+        -e "pget -n 8 -c -O '$dest_dir' -- '$remote_path' ; bye" >> "$logfile_lftp" 2>&1
+      if [[ -f "$local_path" ]]; then
+        size_h=$(numfmt --to=iec "$(stat -c%s "$local_path" 2>/dev/null || echo 0)")
+      else
+        size_h="~"
+      fi
+      if [[ -f "$local_path" ]]; then
+        eval 'echo -e "  ✔ RETRY OK  '"$remote_path"' ('"$size_h"')" '$logfile_display_cmd
+        sed -i "s#✖ Téléchargement incomplet : $remote_path#✔ Téléchargement terminé : $remote_path $size_h#g" "$logfile_display"
+        if [[ -n "$logfile_pushover" ]]; then
+          [[ -e "$logfile_pushover" ]] || echo -e "<b>Téléchargements :</b>" > "$logfile_pushover"
+          grep -q "<b>Téléchargements :</b>" "$logfile_pushover" || echo -e "<b>Téléchargements :</b>" >> "$logfile_pushover"
+          echo -e "$remote_path ($size_h)" >> "$logfile_pushover"
+        fi
+      else
+        eval 'echo -e "  ✖ RETRY KO  '"$remote_path"'"' $logfile_display_cmd
+      fi
+    done
+    RETRY_LIST=()
+  fi
+  # --- Fin retry pass ---
+
+  # Nettoyage (--delete) : annonce ce qui a été supprimé pour CE répertoire
+  if [[ "$DELETEUSELESSFILES" == "yes" ]]; then
+    log_cleaning=$(grep '^---- remove(' "$logfile_lftp" | sed -E 's/^---- remove\((.*)\)/\1/' | sed "s|^$LOCALDIR||" | grep -F -- "$remote_dir" || true)
+    if [[ -n "$log_cleaning" ]]; then
+      eval 'echo -e "$ui_tag_ok Suppressions (dir: '"$remote_dir"')"' $logfile_display_cmd
+      if [[ ! -e "$logfile_pushover" ]]; then
+        echo -e "<b>Supression de :</b>" > "$logfile_pushover"
+      else
+        echo -e "<b>Supression de :</b>" >> "$logfile_pushover"
+      fi
+      while IFS= read -r line; do
+        eval 'echo -e "..... '"$line"'"' $logfile_display_cmd
+        echo -e "$line" >> "$logfile_pushover"
+      done <<< "$log_cleaning"
+    fi
+  fi
+
+  # ---- Notification par répertoire ----
+  if [[ ! -e "$logfile_pushover" ]]; then
+    pushover_message=$(echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\n💻 $(hostname)\n<b>Répertoire:</b> $remote_dir\nDisque dur à jour")
+  else
+    pushover_message=$(echo -e "[ <b>SYNCHRONISATION TERMINÉE</b> ]\n💻 $(hostname)\n<b>Répertoire:</b> $remote_dir\n$(cat "$logfile_pushover")")
+  fi
+  [[ -n "$WEBHOOK_URL" ]] && discord-message "$pushover_message"
+  push-message "$pushover_message"
+
+  # Permissions locales pour CE répertoire
+  chmod 777 -R "$LOCALDIR$remote_dir" 2>/dev/null
+
+  # Restaure le pointeur de log Pushover global
+  logfile_pushover="$_old_logfile_pushover"
+done
+
+if ! $processed_any; then
+  eval 'echo -e "$ui_tag_bad Aucun répertoire à synchroniser (REMOTEDIR vide)"' $logfile_display_cmd
 else
-  eval 'echo -e "$ui_tag_bad Dossier local non créé"' $logfile_display_cmd
+  eval 'echo ""' $logfile_display_cmd
+  eval 'echo -e "$ui_tag_ok Synchronisation terminée pour tous les répertoires"' $logfile_display_cmd
 fi
+
 eval 'echo ""' $logfile_display_cmd
 executed_date=$(date)
 eval 'printf "\e[46m  \e[0m \e[46m  %*s  \e[0m \e[46m  \e[0m \e[46m \e[0m \e[36m\u2759\e[0m\n" $(lon2 "$executed_date") "$executed_date"' $logfile_display_cmd
